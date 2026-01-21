@@ -19,6 +19,7 @@ type BlogMeta struct {
 	Author  string
 	Header  string
 	Summary string
+	Status  string
 	IsBlog  bool
 }
 
@@ -30,13 +31,13 @@ func main() {
 
 	inputPath := os.Args[1]
 	outputPath := os.Args[2]
-	
+
 	fullOutputPath, err := convertLogseqToHugo(inputPath, outputPath)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
-	
+
 	fmt.Printf("Created: %s/index.md\n", fullOutputPath)
 }
 
@@ -61,6 +62,10 @@ func convertLogseqToHugo(inputPath, outputPath string) (string, error) {
 		return "", fmt.Errorf("no list starting with 'type:: blog' found")
 	}
 
+	if meta.Status != "online" {
+		return "", fmt.Errorf("blog post status is '%s', only 'online' posts are converted", meta.Status)
+	}
+
 	// 1. Prepare Folder
 	folderName := fmt.Sprintf("%s_%s", meta.Date, strings.ReplaceAll(meta.Title, " ", "_"))
 	fullOutputPath := filepath.Join(outputPath, folderName)
@@ -83,7 +88,7 @@ func convertLogseqToHugo(inputPath, outputPath string) (string, error) {
 
 	// 4. Write index.md
 	writeIndex(fullOutputPath, meta, strings.TrimSpace(bodyStr))
-	
+
 	return fullOutputPath, nil
 }
 
@@ -134,6 +139,8 @@ func parseBlogList(listNode ast.Node, source []byte, meta *BlogMeta, blocks *[]s
 						meta.Author = val
 					case "header":
 						meta.Header = extractPath(val)
+					case "status":
+						meta.Status = val
 					}
 				}
 			}

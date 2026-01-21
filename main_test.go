@@ -136,3 +136,31 @@ func TestConvertLogseqToHugo_NoBlogMarker(t *testing.T) {
 		t.Errorf("Expected error message to contain %q, got %q", expectedErrMsg, err.Error())
 	}
 }
+
+func TestConvertLogseqToHugo_StatusNotOnline(t *testing.T) {
+	tempDir := t.TempDir()
+	
+	// Create a test file with blog marker but status is "draft"
+	testFile := filepath.Join(tempDir, "test.md")
+	content := []byte(`- [[Blog]]
+	- type:: blog
+	  status:: draft
+	  date:: 2026-01-17
+	  title:: Test Post
+	  author:: test
+	- This is a test post
+`)
+	if err := os.WriteFile(testFile, content, 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+	
+	_, err := convertLogseqToHugo(testFile, tempDir)
+	if err == nil {
+		t.Error("Expected error for blog with status 'draft', got nil")
+	}
+	
+	expectedErrMsg := "only 'online' posts are converted"
+	if err != nil && !strings.Contains(err.Error(), expectedErrMsg) {
+		t.Errorf("Expected error message to contain %q, got %q", expectedErrMsg, err.Error())
+	}
+}
