@@ -56,16 +56,19 @@ func main() {
 	// 2. Process Content
 	var finalContent strings.Builder
 	for _, block := range contentBlocks {
-		finalContent.WriteString(block + "\n")
+		cleaned := strings.TrimSpace(block)
+		if cleaned != "" {
+			finalContent.WriteString(cleaned + "\n\n")
+		}
 	}
 
-	// 3. Process Images (Passing inputDir to resolve ../assets)
-	processedBody := processImages(finalContent.String(), folderName, inputDir)
+	// 3. Process Images & Header
+	bodyStr := processImages(finalContent.String(), folderName, inputDir)
 	handleHeaderImage(meta.Header, folderName, inputDir)
 
 	// 4. Write index.md
-	writeIndex(folderName, meta, processedBody)
-	fmt.Printf("Successfully converted blog to: %s/\n", folderName)
+	writeIndex(folderName, meta, strings.TrimSpace(bodyStr))
+	fmt.Printf("Created: %s/index.md\n", folderName)
 }
 
 func extractBlogByFirstItem(doc ast.Node, source []byte) (BlogMeta, []string) {
@@ -119,35 +122,36 @@ func parseBlogList(listNode ast.Node, source []byte, meta *BlogMeta, blocks *[]s
 				}
 			}
 		} else {
-			// Extract text and preserve nesting for all subsequent items
-			blockText := getRawNodeText(item, source)
+			rawText := getCleanNodeText(item, source)
 			if count == 1 {
-				meta.Summary = strings.TrimSpace(blockText)
+				meta.Summary = strings.ReplaceAll(rawText, "\n", " ")
 			}
-			*blocks = append(*blocks, blockText)
+			*blocks = append(*blocks, rawText)
 		}
 		count++
 	}
 }
 
-func getRawNodeText(n ast.Node, source []byte) string {
+func getCleanNodeText(n ast.Node, source []byte) string {
 	var buf strings.Builder
+	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 
-	// Part 1: The current bullet's content (Paragraph or Heading)
-	firstPart := n.FirstChild()
-	if firstPart != nil {
-		lines := firstPart.Lines()
+		// Fix: Handle Headings specifically
+		if heading, ok := child.(*ast.Heading); ok {
+			hashes := strings.Repeat("#", heading.Level)
+			buf.WriteString(hashes + " ")
+		}
+
+		lines := child.Lines()
 		for i := 0; i < lines.Len(); i++ {
 			line := lines.At(i)
 			buf.Write(line.Value(source))
 		}
-	}
 
-	// Part 2: All nested children (sub-lists)
-	for child := firstPart.NextSibling(); child != nil; child = child.NextSibling() {
-		// Use the goldmark-native text printer for nested structures to keep formatting
-		buf.WriteString("\n")
-		buf.Write(child.Text(source))
+		if child.Kind() == ast.KindList {
+			buf.WriteString("\n")
+			buf.Write(child.Text(source))
+		}
 	}
 	return buf.String()
 }
@@ -166,13 +170,12 @@ func processImages(content string, folder string, inputDir string) string {
 	matches := re.FindAllStringSubmatch(content, -1)
 
 	for _, m := range matches {
-		relAssetPath := m[2] + m[3] // e.g., "../assets/image.png"
+		relAssetPath := m[2] + m[3]
 		src := filepath.Join(inputDir, relAssetPath)
 		dst := filepath.Join(folder, m[3])
 		copyFile(src, dst)
 	}
-	// Clean the markdown to point to the local folder (no subfolders)
-	return re.ReplaceAllString(content, `![$1]($3)`)
+	return re.ReplaceAllString(content, "![$1]($3)")
 }
 
 func handleHeaderImage(relPath, folder, inputDir string) {
@@ -189,9 +192,9 @@ func writeIndex(folder string, meta BlogMeta, content string) {
 	f, _ := os.Create(filepath.Join(folder, "index.md"))
 	defer f.Close()
 
-	summary := strings.Split(meta.Summary, "\n")[0]
+	summary := meta.Summary
 
-	fmt.Fprintf(f, "+++\ndate = '%s'\nlastmod = '%s'\ndraft = false\ntitle = '%s'\nsummary = '%s'\n[params]\n  author = '%s'\n+++\n\n%s",
+	fmt.Fprintf(f, "+++\ndate = '%s'\nlastmod = '%s'\ndraft = false\ntitle = '%s'\nsummary = '%s'\n[params]\n  author = '%s'\n+++\n\n%s\n",
 		meta.Date, meta.Date, meta.Title, summary, meta.Author, content)
 }
 
