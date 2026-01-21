@@ -35,6 +35,9 @@ func main() {
 		return
 	}
 
+	// Determine the directory of the input file to resolve relative asset paths
+	inputDir := filepath.Dir(inputPath)
+
 	md := goldmark.New()
 	reader := text.NewReader(source)
 	doc := md.Parser().Parse(reader)
@@ -46,7 +49,7 @@ func main() {
 		return
 	}
 
-	// 1. Prepare Folder
+	// 1. Prepare Folder (Output will be created in the current working directory)
 	folderName := fmt.Sprintf("%s_%s", meta.Date, strings.ReplaceAll(meta.Title, " ", "_"))
 	os.MkdirAll(folderName, 0755)
 
@@ -56,9 +59,9 @@ func main() {
 		finalContent.WriteString(block + "\n")
 	}
 
-	// 3. Process Images
-	processedBody := processImages(finalContent.String(), folderName)
-	handleHeaderImage(meta.Header, folderName)
+	// 3. Process Images (Passing inputDir to resolve ../assets)
+	processedBody := processImages(finalContent.String(), folderName, inputDir)
+	handleHeaderImage(meta.Header, folderName, inputDir)
 
 	// 4. Write index.md
 	writeIndex(folderName, meta, processedBody)
@@ -157,25 +160,27 @@ func extractPath(raw string) string {
 	return raw
 }
 
-func processImages(content string, folder string) string {
-	re := regexp.MustCompile(`!\[(.*?)\]\(\.\.\/assets\/(.*?)\)`)
+func processImages(content string, folder string, inputDir string) string {
+	// Match both ../assets/ and assets/ paths
+	re := regexp.MustCompile(`!\[(.*?)\]\((.*?assets\/)(.*?)\)`)
 	matches := re.FindAllStringSubmatch(content, -1)
 
 	for _, m := range matches {
-		src := filepath.Join("../assets", m[2])
-		dst := filepath.Join(folder, m[2])
+		relAssetPath := m[2] + m[3] // e.g., "../assets/image.png"
+		src := filepath.Join(inputDir, relAssetPath)
+		dst := filepath.Join(folder, m[3])
 		copyFile(src, dst)
 	}
-	return re.ReplaceAllString(content, `![$1]($2)`)
+	// Clean the markdown to point to the local folder (no subfolders)
+	return re.ReplaceAllString(content, `![$1]($3)`)
 }
 
-func handleHeaderImage(relPath, folder string) {
+func handleHeaderImage(relPath, folder, inputDir string) {
 	if relPath == "" {
 		return
 	}
 	fileName := filepath.Base(relPath)
-	// Look for source in ../assets/
-	src := filepath.Join("..", "assets", fileName)
+	src := filepath.Join(inputDir, relPath)
 	ext := filepath.Ext(fileName)
 	copyFile(src, filepath.Join(folder, "featured"+ext))
 }
@@ -184,7 +189,6 @@ func writeIndex(folder string, meta BlogMeta, content string) {
 	f, _ := os.Create(filepath.Join(folder, "index.md"))
 	defer f.Close()
 
-	// Take first line of summary for frontmatter
 	summary := strings.Split(meta.Summary, "\n")[0]
 
 	fmt.Fprintf(f, "+++\ndate = '%s'\nlastmod = '%s'\ndraft = false\ntitle = '%s'\nsummary = '%s'\n[params]\n  author = '%s'\n+++\n\n%s",
@@ -194,7 +198,7 @@ func writeIndex(folder string, meta BlogMeta, content string) {
 func copyFile(src, dst string) {
 	in, err := os.Open(src)
 	if err != nil {
-		fmt.Printf("Warning: Could not open source image %s: %v\n", src, err)
+		fmt.Printf("Warning: Missing image %s\n", src)
 		return
 	}
 	defer in.Close()
