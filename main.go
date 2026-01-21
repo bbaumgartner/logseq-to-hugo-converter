@@ -30,10 +30,22 @@ func main() {
 
 	inputPath := os.Args[1]
 	outputPath := os.Args[2]
-	source, err := os.ReadFile(inputPath)
+	
+	fullOutputPath, err := convertLogseqToHugo(inputPath, outputPath)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
+	}
+	
+	fmt.Printf("Created: %s/index.md\n", fullOutputPath)
+}
+
+// convertLogseqToHugo converts a Logseq markdown file to Hugo format
+// Returns the full output path where files were written
+func convertLogseqToHugo(inputPath, outputPath string) (string, error) {
+	source, err := os.ReadFile(inputPath)
+	if err != nil {
+		return "", fmt.Errorf("reading input file: %w", err)
 	}
 
 	// Determine the directory of the input file to resolve relative asset paths
@@ -46,14 +58,15 @@ func main() {
 	meta, contentBlocks := extractBlogByFirstItem(doc, source)
 
 	if !meta.IsBlog {
-		fmt.Println("No list starting with 'type:: blog' found.")
-		return
+		return "", fmt.Errorf("no list starting with 'type:: blog' found")
 	}
 
 	// 1. Prepare Folder
 	folderName := fmt.Sprintf("%s_%s", meta.Date, strings.ReplaceAll(meta.Title, " ", "_"))
 	fullOutputPath := filepath.Join(outputPath, folderName)
-	os.MkdirAll(fullOutputPath, 0755)
+	if err := os.MkdirAll(fullOutputPath, 0755); err != nil {
+		return "", fmt.Errorf("creating output directory: %w", err)
+	}
 
 	// 2. Process Content
 	var finalContent strings.Builder
@@ -70,7 +83,8 @@ func main() {
 
 	// 4. Write index.md
 	writeIndex(fullOutputPath, meta, strings.TrimSpace(bodyStr))
-	fmt.Printf("Created: %s/index.md\n", fullOutputPath)
+	
+	return fullOutputPath, nil
 }
 
 func extractBlogByFirstItem(doc ast.Node, source []byte) (BlogMeta, []string) {
