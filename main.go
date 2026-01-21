@@ -69,20 +69,24 @@ func extractBlogByFirstItem(doc ast.Node, source []byte) (BlogMeta, []string) {
 	var meta BlogMeta
 	var contentBlocks []string
 
-	ast.Walk(doc, func(n ast.Node, entering bool) ast.WalkStatus {
+	// Corrected Walk signature to match ast.Walker interface
+	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if entering && n.Kind() == ast.KindList {
-			// Check if the first child (ListItem) contains "type:: blog"
 			firstItem := n.FirstChild()
 			if firstItem != nil {
 				itemText := string(firstItem.Text(source))
 				if strings.Contains(itemText, "type:: blog") {
 					parseBlogList(n, source, &meta, &contentBlocks)
-					return ast.WalkStop
+					return ast.WalkStop, nil
 				}
 			}
 		}
-		return ast.WalkContinue
+		return ast.WalkContinue, nil
 	})
+
+	if err != nil {
+		fmt.Printf("Walk error: %v\n", err)
+	}
 
 	return meta, contentBlocks
 }
@@ -100,10 +104,14 @@ func parseBlogList(listNode ast.Node, source []byte, meta *BlogMeta, blocks *[]s
 				if m := reMeta.FindStringSubmatch(line); m != nil {
 					val := strings.TrimSpace(m[2])
 					switch m[1] {
-					case "date": meta.Date = val
-					case "title": meta.Title = val
-					case "author": meta.Author = val
-					case "header": meta.Header = extractPath(val)
+					case "date":
+						meta.Date = val
+					case "title":
+						meta.Title = val
+					case "author":
+						meta.Author = val
+					case "header":
+						meta.Header = extractPath(val)
 					}
 				}
 			}
@@ -121,7 +129,7 @@ func parseBlogList(listNode ast.Node, source []byte, meta *BlogMeta, blocks *[]s
 
 func getRawNodeText(n ast.Node, source []byte) string {
 	var buf strings.Builder
-	
+
 	// Part 1: The current bullet's content (Paragraph or Heading)
 	firstPart := n.FirstChild()
 	if firstPart != nil {
@@ -162,8 +170,11 @@ func processImages(content string, folder string) string {
 }
 
 func handleHeaderImage(relPath, folder string) {
-	if relPath == "" { return }
+	if relPath == "" {
+		return
+	}
 	fileName := filepath.Base(relPath)
+	// Look for source in ../assets/
 	src := filepath.Join("..", "assets", fileName)
 	ext := filepath.Ext(fileName)
 	copyFile(src, filepath.Join(folder, "featured"+ext))
@@ -173,7 +184,7 @@ func writeIndex(folder string, meta BlogMeta, content string) {
 	f, _ := os.Create(filepath.Join(folder, "index.md"))
 	defer f.Close()
 
-	// Capture the full first block as summary, taking the first logical line for TOML
+	// Take first line of summary for frontmatter
 	summary := strings.Split(meta.Summary, "\n")[0]
 
 	fmt.Fprintf(f, "+++\ndate = '%s'\nlastmod = '%s'\ndraft = false\ntitle = '%s'\nsummary = '%s'\n[params]\n  author = '%s'\n+++\n\n%s",
@@ -182,9 +193,15 @@ func writeIndex(folder string, meta BlogMeta, content string) {
 
 func copyFile(src, dst string) {
 	in, err := os.Open(src)
-	if err != nil { return }
+	if err != nil {
+		fmt.Printf("Warning: Could not open source image %s: %v\n", src, err)
+		return
+	}
 	defer in.Close()
-	out, _ := os.Create(dst)
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
 	defer out.Close()
 	io.Copy(out, in)
 }
