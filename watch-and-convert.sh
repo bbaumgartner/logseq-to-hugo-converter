@@ -118,8 +118,8 @@ git_commit_and_push() {
 
 # Function to convert all markdown files
 convert_all_files() {
-    echo -e "${YELLOW}Change detected! Waiting 3 seconds for additional changes...${NC}"
-    sleep 3
+    echo -e "${YELLOW}Change detected! Waiting 30 seconds for additional changes...${NC}"
+    sleep 30
     
     echo -e "${GREEN}Converting all markdown files...${NC}"
     
