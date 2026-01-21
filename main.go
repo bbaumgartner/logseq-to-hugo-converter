@@ -23,12 +23,13 @@ type BlogMeta struct {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run main.go <input_file.md>")
+	if len(os.Args) < 3 {
+		fmt.Println("Usage: go run main.go <input_file.md> <output_directory>")
 		return
 	}
 
 	inputPath := os.Args[1]
+	outputPath := os.Args[2]
 	source, err := os.ReadFile(inputPath)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -49,9 +50,10 @@ func main() {
 		return
 	}
 
-	// 1. Prepare Folder (Output will be created in the current working directory)
+	// 1. Prepare Folder
 	folderName := fmt.Sprintf("%s_%s", meta.Date, strings.ReplaceAll(meta.Title, " ", "_"))
-	os.MkdirAll(folderName, 0755)
+	fullOutputPath := filepath.Join(outputPath, folderName)
+	os.MkdirAll(fullOutputPath, 0755)
 
 	// 2. Process Content
 	var finalContent strings.Builder
@@ -63,12 +65,12 @@ func main() {
 	}
 
 	// 3. Process Images & Header
-	bodyStr := processImages(finalContent.String(), folderName, inputDir)
-	handleHeaderImage(meta.Header, folderName, inputDir)
+	bodyStr := processImages(finalContent.String(), fullOutputPath, inputDir)
+	handleHeaderImage(meta.Header, fullOutputPath, inputDir)
 
 	// 4. Write index.md
-	writeIndex(folderName, meta, strings.TrimSpace(bodyStr))
-	fmt.Printf("Created: %s/index.md\n", folderName)
+	writeIndex(fullOutputPath, meta, strings.TrimSpace(bodyStr))
+	fmt.Printf("Created: %s/index.md\n", fullOutputPath)
 }
 
 func extractBlogByFirstItem(doc ast.Node, source []byte) (BlogMeta, []string) {
