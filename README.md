@@ -197,3 +197,16 @@ header:: ![image](../assets/header.jpg)
 - Clean separation between metadata and content
 
 **Example:** [examples/pages/Renan.md](examples/pages/Renan.md) → [2024-06-14_Renan/index.md](2024-06-14_Renan/index.md)
+
+## Software Design
+
+📁 logseq-to-hugo-converter/
+├── main.go              ⭐ Main entry & orchestration (115 lines)
+├── types.go             📋 Type definitions
+├── metadata.go          🏷️  Metadata parsing
+├── extractors.go        🔍 Blog extraction strategies
+├── processors.go        🖼️  Image processing
+├── writer.go            📝 Hugo format writing
+├── main_test.go         ✅ Tests
+├── watch-and-convert.sh 👀 macOS watcher
+└── watch-and-convert-linux.sh 🐧 Linux watcher
