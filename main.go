@@ -56,10 +56,16 @@ func convertLogseqToHugo(inputPath, outputPath string) (string, error) {
 	reader := text.NewReader(source)
 	doc := md.Parser().Parse(reader)
 
+	// Try nested list format first (original format)
 	meta, contentBlocks := extractBlogByFirstItem(doc, source)
 
+	// If not found, try top-level metadata format
 	if !meta.IsBlog {
-		return "", fmt.Errorf("no list starting with 'type:: blog' found")
+		meta, contentBlocks = extractBlogFromTopLevel(doc, source)
+	}
+
+	if !meta.IsBlog {
+		return "", fmt.Errorf("no blog post found with 'type:: blog' marker")
 	}
 
 	if meta.Status != "online" {
@@ -115,6 +121,84 @@ func extractBlogByFirstItem(doc ast.Node, source []byte) (BlogMeta, []string) {
 		fmt.Printf("Walk error: %v\n", err)
 	}
 
+	return meta, contentBlocks
+}
+
+func extractBlogFromTopLevel(doc ast.Node, source []byte) (BlogMeta, []string) {
+	var meta BlogMeta
+	var contentBlocks []string
+	reMeta := regexp.MustCompile(`(\w+)::\s*(.*)`)
+	
+	// Track if we've found the metadata section
+	foundMetadata := false
+	metadataLines := []string{}
+	
+	// Walk through the document to find paragraphs (top-level metadata) and lists (content)
+	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		
+		// Check paragraphs for top-level metadata
+		if n.Kind() == ast.KindParagraph {
+			text := string(n.Text(source))
+			// Check if this paragraph contains metadata
+			if strings.Contains(text, "::") {
+				lines := strings.Split(text, "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "::") {
+						metadataLines = append(metadataLines, line)
+						if strings.Contains(line, "type:: blog") {
+							foundMetadata = true
+						}
+					}
+				}
+			}
+		}
+		
+		// If we've found metadata, collect content from lists
+		if foundMetadata && n.Kind() == ast.KindList {
+			// Process each list item as content
+			for item := n.FirstChild(); item != nil; item = item.NextSibling() {
+				rawText := getCleanNodeText(item, source)
+				contentBlocks = append(contentBlocks, rawText)
+			}
+		}
+		
+		return ast.WalkContinue, nil
+	})
+	
+	if err != nil {
+		fmt.Printf("Walk error: %v\n", err)
+	}
+	
+	// Parse the metadata if we found it
+	if foundMetadata {
+		meta.IsBlog = true
+		for _, line := range metadataLines {
+			if m := reMeta.FindStringSubmatch(line); m != nil {
+				val := strings.TrimSpace(m[2])
+				switch m[1] {
+				case "date":
+					meta.Date = val
+				case "title":
+					meta.Title = val
+				case "author":
+					meta.Author = val
+				case "header":
+					meta.Header = extractPath(val)
+				case "status":
+					meta.Status = val
+				}
+			}
+		}
+		
+		// Use first content block as summary if available
+		if len(contentBlocks) > 0 {
+			meta.Summary = strings.ReplaceAll(contentBlocks[0], "\n", " ")
+		}
+	}
+	
 	return meta, contentBlocks
 }
 

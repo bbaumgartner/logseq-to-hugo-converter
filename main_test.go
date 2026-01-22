@@ -131,7 +131,7 @@ func TestConvertLogseqToHugo_NoBlogMarker(t *testing.T) {
 		t.Error("Expected error for file without blog marker, got nil")
 	}
 	
-	expectedErrMsg := "no list starting with 'type:: blog' found"
+	expectedErrMsg := "no blog post found with 'type:: blog' marker"
 	if err != nil && !strings.Contains(err.Error(), expectedErrMsg) {
 		t.Errorf("Expected error message to contain %q, got %q", expectedErrMsg, err.Error())
 	}
@@ -162,5 +162,51 @@ func TestConvertLogseqToHugo_StatusNotOnline(t *testing.T) {
 	expectedErrMsg := "only 'online' posts are converted"
 	if err != nil && !strings.Contains(err.Error(), expectedErrMsg) {
 		t.Errorf("Expected error message to contain %q, got %q", expectedErrMsg, err.Error())
+	}
+}
+
+func TestConvertLogseqToHugo_RenanExample(t *testing.T) {
+	// Test conversion of the Renan.md example file which uses top-level metadata format
+	tempDir := t.TempDir()
+	
+	inputPath := "examples/pages/Renan.md"
+	expectedOutputDir := "2024-06-14_Renan"
+	
+	// Run the conversion
+	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	if err != nil {
+		t.Fatalf("convertLogseqToHugo() error = %v", err)
+	}
+	
+	// Verify the output directory was created with the expected name
+	expectedDirName := filepath.Base(expectedOutputDir)
+	actualDirName := filepath.Base(outputPath)
+	if actualDirName != expectedDirName {
+		t.Errorf("Output directory name = %v, want %v", actualDirName, expectedDirName)
+	}
+	
+	// Verify index.md exists
+	indexPath := filepath.Join(outputPath, "index.md")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatalf("index.md does not exist at %s", indexPath)
+	}
+	
+	// Read and verify the generated content
+	actualContent, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated index.md: %v", err)
+	}
+	
+	expectedIndexPath := filepath.Join(expectedOutputDir, "index.md")
+	expectedContent, err := os.ReadFile(expectedIndexPath)
+	if err != nil {
+		t.Fatalf("Failed to read expected index.md: %v", err)
+	}
+	
+	actualStr := strings.TrimSpace(string(actualContent))
+	expectedStr := strings.TrimSpace(string(expectedContent))
+	
+	if actualStr != expectedStr {
+		t.Errorf("index.md content mismatch.\nExpected:\n%s\n\nActual:\n%s", expectedStr, actualStr)
 	}
 }

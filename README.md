@@ -80,6 +80,19 @@ Install `inotify-tools` for file watching:
 sudo apt install inotify-tools
 ```
 
+### Running Tests
+
+To verify the installation and ensure everything is working correctly, run the test suite:
+
+```bash
+# Run all tests
+go test
+
+# Run tests with verbose output
+go test -v
+```
+
+
 ## Usage
 
 ### Running the File Watcher
@@ -123,11 +136,64 @@ go run main.go examples/journals/2026_01_17.md ./output
 
 ### Requirements for Blog Posts
 
-For a Logseq list to be converted, it must include:
-- `type:: blog` - Marks the list as a blog post
-- `status:: online` - Only posts with this status are converted
+All blog posts must include the following metadata fields:
+- `type:: blog` - Marks the content as a blog post
+- `status:: online` - Only posts with this status are converted (draft posts are ignored)
 - `date:: YYYY-MM-DD` - Publication date
 - `title:: Your Title` - Post title
 - `author:: Author Name` - Author name
+- `header:: ![image](path/to/image.jpg)` - (Optional) Featured image
 
-See the [example](2026-01-17_Frühlingspläne_2026/index.md) for a converted blog post.
+## Supported Formats
+
+The converter supports two different Logseq formats:
+
+### Format 1: Nested List Structure (Journals)
+
+This format is commonly used in Logseq journals where you organize content under topic headings.
+
+```markdown
+- [[Blog]]
+  - type:: blog
+    status:: online
+    date:: 2026-01-17
+    title:: Spring Plans 2026
+    author:: benno
+    header:: ![image](../assets/featured.jpg)
+  - First paragraph of content
+  - ## Section Heading
+  - More content here
+  - Another paragraph
+```
+
+**Key characteristics:**
+- Metadata is in the first list item
+- Content follows as subsequent list items
+- Each list item becomes a paragraph in the output
+
+**Example:** [examples/journals/2026_01_17.md](examples/journals/2026_01_17.md) → [2026-01-17_Frühlingspläne_2026/index.md](2026-01-17_Frühlingspläne_2026/index.md)
+
+### Format 2: Top-Level Metadata (Pages)
+
+This format places metadata at the top of the file, followed by list items for content.
+
+```markdown
+type:: blog
+status:: online
+date:: 2024-06-14
+title:: My Blog Post
+author:: Author Name
+header:: ![image](../assets/header.jpg)
+
+- First paragraph of content
+- Second paragraph
+- ![image](../assets/photo.jpg)
+- More content
+```
+
+**Key characteristics:**
+- Metadata fields at the top level (not in a list)
+- Content organized as list items below the metadata
+- Clean separation between metadata and content
+
+**Example:** [examples/pages/Renan.md](examples/pages/Renan.md) → [2024-06-14_Renan/index.md](2024-06-14_Renan/index.md)
