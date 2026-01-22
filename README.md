@@ -126,13 +126,15 @@ go test -v
 You can also convert individual files without the watcher:
 
 ```bash
-go run main.go <input_file.md> <output_directory>
+go run . <input_file.md> <output_directory>
 ```
 
 **Example:**
 ```bash
-go run main.go examples/journals/2026_01_17.md ./output
+go run . examples/journals/2026_01_17.md ./output
 ```
+
+**Note:** Use `go run .` (dot) to compile all source files, not just `main.go`.
 
 ### Requirements for Blog Posts
 

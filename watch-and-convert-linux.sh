@@ -148,7 +148,8 @@ convert_all_files() {
         echo -e "\n${YELLOW}Processing:${NC} $md_file"
         
         # Run the converter
-        if go run main.go "$md_file" "$OUTPUT_DIR" 2>&1; then
+        # Use 'go run .' to compile all Go files in the directory, not just main.go
+        if go run . "$md_file" "$OUTPUT_DIR" 2>&1; then
             ((success_count++))
         else
             ((error_count++))
