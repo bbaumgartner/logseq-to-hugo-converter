@@ -38,8 +38,9 @@ func NewImageProcessor(inputDir, outputDir string) *ImageProcessor {
 		//   (.*?assets\/)  = Capture path including "assets/"
 		//   (.*?)          = Capture the filename
 		//   \)             = Closing parenthesis
-		// Example match: ![photo](../assets/image.jpg)
-		assetRegex: regexp.MustCompile(`!\[(.*?)\]\((.*?assets\/)(.*?)\)`),
+		//   (?:\{[^}]*\})? = Optional non-capturing group for Logseq metadata like {:height 446, :width 778}
+		// Example match: ![photo](../assets/image.jpg){:height 100, :width 200}
+		assetRegex: regexp.MustCompile(`!\[(.*?)\]\((.*?assets\/)(.*?)\)(?:\{[^}]*\})?`),
 	}
 }
 
