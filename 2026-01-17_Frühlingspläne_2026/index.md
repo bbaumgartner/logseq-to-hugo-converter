@@ -57,6 +57,8 @@ Danach haben wir für eine Woche eine Jeanneau Sun Odyssey 410 und dann eine 440
 Grundsätzlich ganz anders ist ein Katamaran: mit zwei Rümpfen segelt es sich schlechter, d.h. langsamer und man kann nicht so hart an den Wind. Dafür hat man unendlich viel mehr Platz und Komfort. Da es sich anders segelt, und vor allem anders manövriert, haben wir noch eine Woche Katamarankurs bei JoJo gebucht, wobei ich die erste Hälfte der Woche mache und Alex die zweite Hälfte.
 
 Dann haben wir eine Nautitec 40, in der Theory bisher unser klarer Favorit, und dann eine Lagoon 380 gebucht. Die Nautitec ist relative selten, die Lagoon dagegen wieder die Grosserie, mit entsprechenden Qualitätsproblemen.
+* here we have a list
+* with two items
 
 Wir sind gespannt und denken nach diesen 4 Booten haben wir ein besseres Gefühl dafür was moderne Boote bieten können. Im Herbst wollen wir uns dann auf ein Segment vertiefen und evtl. auch ältere, qualitativ hochwertigere, Boote mieten, aber wir müssen ja als Anfänger nicht gleich ein gutes Boot schrotten.
 

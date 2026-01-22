@@ -33,11 +33,14 @@ func NewNestedListExtractor() *NestedListExtractor {
 // Extract implements the BlogExtractor interface for nested list format.
 // It walks through the markdown AST looking for lists containing "type:: blog".
 // Parameters:
-//   doc: The parsed markdown document (we'll cast it to ast.Node)
-//   source: The raw markdown content as bytes
+//
+//	doc: The parsed markdown document (we'll cast it to ast.Node)
+//	source: The raw markdown content as bytes
+//
 // Returns:
-//   *BlogPost: Pointer to extracted blog post (nil if not found)
-//   bool: true if a blog post was found, false otherwise
+//
+//	*BlogPost: Pointer to extracted blog post (nil if not found)
+//	bool: true if a blog post was found, false otherwise
 func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost, bool) {
 	// Variables to store the result
 	var post *BlogPost // Will hold the extracted post (nil by default)
@@ -57,7 +60,7 @@ func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost
 
 		// Get the first item in the list
 		firstItem := n.FirstChild()
-		
+
 		// If there's no first item, or it doesn't contain "type:: blog",
 		// continue searching
 		if firstItem == nil || !strings.Contains(string(firstItem.Text(source)), "type:: blog") {
@@ -67,7 +70,7 @@ func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost
 		// We found a blog list! Extract it
 		post = e.extractFromList(n, source)
 		found = true
-		
+
 		// Stop walking the tree since we found what we need
 		return ast.WalkStop, nil
 	})
@@ -83,10 +86,10 @@ func (e *NestedListExtractor) extractFromList(listNode ast.Node, source []byte) 
 	// Initialize a new BlogPost with an empty Content slice
 	// []string{} creates an empty slice of strings
 	post := &BlogPost{Content: []string{}}
-	
+
 	// Slice to collect metadata lines
 	metadataLines := []string{}
-	
+
 	// Counter to track which item we're processing
 	count := 0
 
@@ -110,7 +113,7 @@ func (e *NestedListExtractor) extractFromList(listNode ast.Node, source []byte) 
 
 	// Parse the metadata lines into a BlogMeta struct
 	post.Meta = e.parser.Parse(metadataLines)
-	
+
 	// If there's content, use the first block as the summary
 	if len(post.Content) > 0 {
 		// Replace newlines with spaces for a clean summary
@@ -143,9 +146,9 @@ func NewTopLevelMetadataExtractor() *TopLevelMetadataExtractor {
 // It looks for metadata in paragraphs and content in lists.
 func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*BlogPost, bool) {
 	// Slices to collect metadata and content
-	metadataLines := []string{}   // Will hold "key:: value" lines
-	contentBlocks := []string{}   // Will hold content paragraphs
-	foundBlogMarker := false      // Flag: have we seen "type:: blog"?
+	metadataLines := []string{} // Will hold "key:: value" lines
+	contentBlocks := []string{} // Will hold content paragraphs
+	foundBlogMarker := false    // Flag: have we seen "type:: blog"?
 
 	// Walk through the markdown AST
 	ast.Walk(doc.(ast.Node), func(n ast.Node, entering bool) (ast.WalkStatus, error) {
@@ -158,18 +161,18 @@ func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*Bl
 		if n.Kind() == ast.KindParagraph {
 			// Get the text content of this paragraph
 			text := string(n.Text(source))
-			
+
 			// If it contains "::" it might be metadata
 			if strings.Contains(text, "::") {
 				// Split the paragraph into individual lines
 				lines := strings.Split(text, "\n")
-				
+
 				// Check each line for metadata
 				for _, line := range lines {
 					if strings.Contains(line, "::") {
 						// This line is metadata, save it
 						metadataLines = append(metadataLines, line)
-						
+
 						// If it's the blog type marker, set our flag
 						if strings.Contains(line, "type:: blog") {
 							foundBlogMarker = true
@@ -180,10 +183,18 @@ func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*Bl
 		}
 
 		// After finding the blog marker, collect content from lists
+		// Only process top-level lists, not nested lists
 		if foundBlogMarker && n.Kind() == ast.KindList {
-			// Iterate through all items in this list
+			// Check if this list is nested (parent is a ListItem)
+			// If so, skip it because it will be processed by its parent
+			if n.Parent() != nil && n.Parent().Kind() == ast.KindListItem {
+				return ast.WalkContinue, nil // Skip nested lists
+			}
+
+			// Iterate through all items in this top-level list
 			for item := n.FirstChild(); item != nil; item = item.NextSibling() {
 				// Extract the text from each list item
+				// This will include nested lists formatted correctly
 				contentBlocks = append(contentBlocks, extractNodeText(item, source))
 			}
 		}
@@ -200,7 +211,7 @@ func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*Bl
 	// Create the blog post from our collected data
 	post := &BlogPost{
 		Meta:    e.parser.Parse(metadataLines), // Parse metadata into struct
-		Content: contentBlocks,                  // Set the content blocks
+		Content: contentBlocks,                 // Set the content blocks
 	}
 
 	// If there's content, use first block as summary
@@ -219,10 +230,13 @@ func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*Bl
 // extractNodeText extracts clean text from a markdown AST node.
 // This handles special cases like headings and nested lists.
 // Parameters:
-//   n: The AST node to extract text from
-//   source: The original markdown content as bytes
+//
+//	n: The AST node to extract text from
+//	source: The original markdown content as bytes
+//
 // Returns:
-//   string: The extracted and cleaned text
+//
+//	string: The extracted and cleaned text
 func extractNodeText(n ast.Node, source []byte) string {
 	// strings.Builder is an efficient way to build strings
 	// It's better than concatenating strings with +
@@ -242,17 +256,36 @@ func extractNodeText(n ast.Node, source []byte) string {
 		// Get the lines that make up this node
 		// Lines() returns a Segments collection
 		lines := child.Lines()
-		
+
 		// Iterate through each line segment
 		for i := 0; i < lines.Len(); i++ {
-			line := lines.At(i)          // Get the i-th segment
+			line := lines.At(i)           // Get the i-th segment
 			buf.Write(line.Value(source)) // Write the line's bytes to the buffer
 		}
 
 		// Special handling for nested lists
+		// Convert nested list items to use asterisks and proper formatting
 		if child.Kind() == ast.KindList {
-			buf.WriteString("\n")        // Add a newline
-			buf.Write(child.Text(source)) // Write the list text
+			buf.WriteString("\n") // Add a newline before the list
+
+			// Iterate through each list item in the nested list
+			for listItem := child.FirstChild(); listItem != nil; listItem = listItem.NextSibling() {
+				// Write the list marker (asterisk)
+				buf.WriteString("* ")
+
+				// Extract text from this list item's children
+				// We need to get the actual text content from the paragraph or text nodes
+				for itemChild := listItem.FirstChild(); itemChild != nil; itemChild = itemChild.NextSibling() {
+					itemLines := itemChild.Lines()
+					for i := 0; i < itemLines.Len(); i++ {
+						line := itemLines.At(i)
+						buf.Write(line.Value(source))
+					}
+				}
+
+				// Add a newline after each list item
+				buf.WriteString("\n")
+			}
 		}
 	}
 
