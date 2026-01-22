@@ -200,10 +200,6 @@ header:: ![image](../assets/header.jpg)
 
 ## Software Design
 
-The converter uses the **Strategy Pattern** for flexible blog post extraction from different Logseq formats.
-
-### Architecture Diagram
-
 ```plantuml
 @startuml
 !theme plain

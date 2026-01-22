@@ -1,36 +1,97 @@
+// This file handles writing blog posts in Hugo's expected format.
+// Hugo is a static site generator that expects specific file structures
+// and front matter (metadata) format.
 package main
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+	"fmt"           // Formatted I/O
+	"os"            // Operating system functions
+	"path/filepath" // File path manipulation
 )
 
-// HugoWriter writes blog posts in Hugo format
+// HugoWriter is responsible for writing blog posts in Hugo format.
+// Hugo expects:
+//   - An index.md file in each post's directory
+//   - TOML front matter (between +++ markers) with metadata
+//   - Content after the front matter
 type HugoWriter struct {
-	outputDir string
+	outputDir string // Directory where the index.md file should be created
 }
 
+// NewHugoWriter creates a new HugoWriter instance.
+// This is a constructor function that initializes the writer.
+// Parameters:
+//   outputDir: The directory where Hugo files should be written
+// Returns:
+//   *HugoWriter: A pointer to the new writer instance
 func NewHugoWriter(outputDir string) *HugoWriter {
+	// Return a pointer to a new HugoWriter struct
+	// The & operator creates a pointer to the struct
 	return &HugoWriter{outputDir: outputDir}
 }
 
+// Write creates an index.md file with Hugo-formatted content.
+// This method generates the front matter and writes the complete file.
+// Parameters:
+//   meta: BlogMeta struct containing all the metadata
+//   content: The processed blog content (markdown text)
+// Returns:
+//   error: An error if something went wrong, nil if successful
 func (w *HugoWriter) Write(meta BlogMeta, content string) error {
+	// Build the full path to the index.md file
+	// filepath.Join combines directory and filename with correct separator
 	indexPath := filepath.Join(w.outputDir, "index.md")
+	
+	// Create (or overwrite) the index.md file
+	// os.Create creates a new file or truncates an existing one
 	f, err := os.Create(indexPath)
+	
+	// Check if file creation failed
 	if err != nil {
+		// Return a formatted error with context
+		// %w wraps the original error, %s is string formatting
 		return fmt.Errorf("creating index.md: %w", err)
 	}
+	
+	// Defer closing the file until the function exits
+	// This ensures the file is always closed, even if an error occurs
 	defer f.Close()
 
+	// Build the Hugo front matter in TOML format
+	// TOML uses +++ delimiters and key = 'value' syntax
+	// fmt.Sprintf formats a string with variables substituted
+	// The %s placeholders are replaced with the actual values
 	frontMatter := fmt.Sprintf(
-		"+++\ndate = '%s'\nlastmod = '%s'\ndraft = false\ntitle = '%s'\nsummary = '%s'\n[params]\n  author = '%s'\n+++\n\n",
-		meta.Date, meta.Date, meta.Title, meta.Summary, meta.Author,
+		// Each line in this string becomes part of the front matter
+		"+++\n"+                              // Opening delimiter
+		"date = '%s'\n"+                      // Publication date
+		"lastmod = '%s'\n"+                   // Last modified date (same as date)
+		"draft = false\n"+                    // Not a draft (published)
+		"title = '%s'\n"+                     // Post title
+		"summary = '%s'\n"+                   // Post summary/excerpt
+		"[params]\n"+                         // Custom parameters section
+		"  author = '%s'\n"+                  // Author name (indented under params)
+		"+++\n\n",                            // Closing delimiter + blank line
+		meta.Date,    // First %s -> date
+		meta.Date,    // Second %s -> lastmod
+		meta.Title,   // Third %s -> title
+		meta.Summary, // Fourth %s -> summary
+		meta.Author,  // Fifth %s -> author
 	)
 
-	if _, err := f.WriteString(frontMatter + content + "\n"); err != nil {
+	// Write the complete file content
+	// f.WriteString writes a string to the file
+	// We concatenate the front matter, content, and a final newline
+	_, err = f.WriteString(frontMatter + content + "\n")
+	
+	// Check if writing failed
+	if err != nil {
+		// Return a formatted error
 		return fmt.Errorf("writing content: %w", err)
 	}
 
+	// Success! Return nil (no error)
+	// In Go, functions often return error as the last return value
+	// nil means "no error"
 	return nil
 }
