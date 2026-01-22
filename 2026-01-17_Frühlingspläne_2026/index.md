@@ -1,11 +1,11 @@
 +++
-date = '2026-01-17'
-lastmod = '2026-01-17'
+date = "2026-01-17"
+lastmod = "2026-01-17"
 draft = false
-title = 'Frühlingspläne 2026'
-summary = 'Als wir die Idee hatten um die Welt zu segeln gab es eigentlich nur ein grösseres Problem: wir können gar nicht segeln. Mich macht sowas nervös, aber Alex beruhigt mich: wir haben ja alle Zeit der Welt zu lernen, und genau das ist was wir 2026 tuen werden.'
+title = "Frühlingspläne 2026"
+summary = "Als wir die Idee hatten um die Welt zu segeln gab es eigentlich nur ein grösseres Problem: wir können gar nicht segeln. Mich macht sowas nervös, aber Alex beruhigt mich: wir haben ja alle Zeit der Welt zu lernen, und genau das ist was wir 2026 tuen werden."
 [params]
-  author = 'benno'
+  author = "benno"
 +++
 
 Als wir die Idee hatten um die Welt zu segeln gab es eigentlich nur ein grösseres Problem: wir können gar nicht segeln. Mich macht sowas nervös, aber Alex beruhigt mich: wir haben ja alle Zeit der Welt zu lernen, und genau das ist was wir 2026 tuen werden.

@@ -1,14 +1,14 @@
 +++
-date = '2024-06-14'
-lastmod = '2024-06-14'
+date = "2024-06-14"
+lastmod = "2024-06-14"
 draft = false
-title = 'Renan'
-summary = 'My dream is to embark on a journey across the globe in a camper, while my wife dreams of sailing around the world. So, let's delve into the world of sailing.'
+title = "Renan"
+summary = "My dream is to embark on a journey across the globe in a camper, while my \"wife\" dreams of sailing around the world. So, let's delve into the world of sailing."
 [params]
-  author = 'Benno'
+  author = "Benno"
 +++
 
-My dream is to embark on a journey across the globe in a camper, while my wife dreams of sailing around the world. So, let's delve into the world of sailing.
+My dream is to embark on a journey across the globe in a camper, while my "wife" dreams of sailing around the world. So, let's delve into the world of sailing.
 
 ![quitschi.jpg](quitschi_1769019502364_0.jpg)
 

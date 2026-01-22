@@ -7,7 +7,7 @@ title:: Renan
 author:: Benno
 header:: ![image](../assets/renand.jpg)
 
-- My dream is to embark on a journey across the globe in a camper, while my wife dreams of sailing around the world. So, let's delve into the world of sailing.
+- My dream is to embark on a journey across the globe in a camper, while my "wife" dreams of sailing around the world. So, let's delve into the world of sailing.
 - ![quitschi.jpg](../assets/quitschi_1769019502364_0.jpg)
 - We drove our beloved Mitsubishi Van from Europe to Mongolia and back, covering 20,000 kilometers—a journey we loved. However, time has caught up with us, and now we crave creature comforts: a comfortable bed, a shower, a toilet, a kitchen, a living room, air conditioning, heating, and high-speed internet. We've grown accustomed to these luxuries, and we don't want to give them up. Yes, we are old, and that’s fine. A camper, as much as we adore it, simply cannot provide all the amenities we now rely on. To satisfy our needs, we'd require a substantial vehicle—perhaps a truck or a bus weighing 10 to 20 tons. Some adventurers opt for such vehicles, despite the hefty fuel consumption and environmental impact.
 - Alternatively, a sailing vessel weighing 10 to 20 tons—with a sail, of course—can effortlessly meet our requirements and allow us to navigate the world at no cost for fuel.

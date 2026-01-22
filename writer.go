@@ -7,6 +7,7 @@ import (
 	"fmt"           // Formatted I/O
 	"os"            // Operating system functions
 	"path/filepath" // File path manipulation
+	"strings"       // String manipulation for escaping
 )
 
 // HugoWriter is responsible for writing blog posts in Hugo format.
@@ -58,25 +59,26 @@ func (w *HugoWriter) Write(meta BlogMeta, content string) error {
 	defer f.Close()
 
 	// Build the Hugo front matter in TOML format
-	// TOML uses +++ delimiters and key = 'value' syntax
+	// TOML uses +++ delimiters and key = "value" syntax (with double quotes)
+	// We must escape any double quotes in the values with \"
 	// fmt.Sprintf formats a string with variables substituted
 	// The %s placeholders are replaced with the actual values
 	frontMatter := fmt.Sprintf(
 		// Each line in this string becomes part of the front matter
 		"+++\n"+                              // Opening delimiter
-		"date = '%s'\n"+                      // Publication date
-		"lastmod = '%s'\n"+                   // Last modified date (same as date)
+		"date = \"%s\"\n"+                    // Publication date (double quotes)
+		"lastmod = \"%s\"\n"+                 // Last modified date (same as date)
 		"draft = false\n"+                    // Not a draft (published)
-		"title = '%s'\n"+                     // Post title
-		"summary = '%s'\n"+                   // Post summary/excerpt
+		"title = \"%s\"\n"+                   // Post title (escaped)
+		"summary = \"%s\"\n"+                 // Post summary/excerpt (escaped)
 		"[params]\n"+                         // Custom parameters section
-		"  author = '%s'\n"+                  // Author name (indented under params)
+		"  author = \"%s\"\n"+                // Author name (indented under params)
 		"+++\n\n",                            // Closing delimiter + blank line
-		meta.Date,    // First %s -> date
-		meta.Date,    // Second %s -> lastmod
-		meta.Title,   // Third %s -> title
-		meta.Summary, // Fourth %s -> summary
-		meta.Author,  // Fifth %s -> author
+		escapeTomlString(meta.Date),    // Escape date
+		escapeTomlString(meta.Date),    // Escape lastmod
+		escapeTomlString(meta.Title),   // Escape title
+		escapeTomlString(meta.Summary), // Escape summary
+		escapeTomlString(meta.Author),  // Escape author
 	)
 
 	// Write the complete file content
@@ -94,4 +96,24 @@ func (w *HugoWriter) Write(meta BlogMeta, content string) error {
 	// In Go, functions often return error as the last return value
 	// nil means "no error"
 	return nil
+}
+
+// escapeTomlString escapes special characters for TOML string values.
+// TOML requires double quotes to be escaped with a backslash.
+// It also escapes backslashes themselves to avoid ambiguity.
+// Parameters:
+//   s: The string to escape
+// Returns:
+//   string: The escaped string safe for TOML
+func escapeTomlString(s string) string {
+	// First, escape backslashes (must be done first!)
+	// If we do this last, we'd escape the backslashes we just added
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	
+	// Then, escape double quotes
+	// \" becomes \\\" in the TOML (backslash + escaped quote)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	
+	// Return the escaped string
+	return s
 }
