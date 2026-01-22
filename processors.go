@@ -9,6 +9,7 @@ import (
 	"os"       // Operating system functions (file operations)
 	"path/filepath" // File path manipulation
 	"regexp"   // Regular expressions
+	"strings"  // String manipulation for extension checking
 )
 
 // ImageProcessor is responsible for handling all image-related operations.
@@ -42,21 +43,22 @@ func NewImageProcessor(inputDir, outputDir string) *ImageProcessor {
 	}
 }
 
-// ProcessContent processes all images in the content string.
-// It finds image references, copies the image files, and updates the references.
+// ProcessContent processes all images and videos in the content string.
+// It finds media references, copies the files, and updates the references.
+// Videos are converted to Hugo shortcode format: {{< video src="file.mp4" >}}
 // Parameters:
-//   content: The markdown content containing image references
+//   content: The markdown content containing media references
 // Returns:
-//   string: Updated content with simplified image paths
+//   string: Updated content with simplified paths and video shortcodes
 func (p *ImageProcessor) ProcessContent(content string) string {
-	// Find all image references in the content
+	// Find all media references in the content
 	// FindAllStringSubmatch returns a 2D slice:
 	//   - Outer slice: one element per match
 	//   - Inner slice: [full match, capture group 1, capture group 2, ...]
 	// -1 means find all matches (not just the first)
 	matches := p.assetRegex.FindAllStringSubmatch(content, -1)
 
-	// Process each found image
+	// Process each found media file
 	// range iterates over the slice, _ discards the index
 	for _, match := range matches {
 		// match[0] = entire match (e.g., "![photo](../assets/image.jpg)")
@@ -64,22 +66,42 @@ func (p *ImageProcessor) ProcessContent(content string) string {
 		// match[2] = path to assets (e.g., "../assets/")
 		// match[3] = filename (e.g., "image.jpg")
 		
-		// Build the source path (where the image currently is)
+		// Build the source path (where the media file currently is)
 		// filepath.Join combines path parts with the correct separator
 		src := filepath.Join(p.inputDir, match[2]+match[3])
 		
-		// Build the destination path (where to copy the image)
+		// Build the destination path (where to copy the media file)
 		dst := filepath.Join(p.outputDir, match[3])
 		
-		// Copy the image file
+		// Copy the media file
 		p.copyFile(src, dst)
 	}
 
-	// Update the content to use simplified paths
-	// ReplaceAllString replaces matches with a new pattern
-	// $1 and $3 reference capture groups from the original pattern
-	// This changes "![alt](../assets/image.jpg)" to "![alt](image.jpg)"
-	return p.assetRegex.ReplaceAllString(content, "![$1]($3)")
+	// Update the content with a custom replacement function
+	// This allows us to check each match and decide how to replace it
+	result := p.assetRegex.ReplaceAllStringFunc(content, func(match string) string {
+		// Extract the parts of this match
+		parts := p.assetRegex.FindStringSubmatch(match)
+		if len(parts) != 4 {
+			return match // If pattern doesn't match, return unchanged
+		}
+		
+		altText := parts[1]  // The alt text
+		filename := parts[3]  // The filename
+		
+		// Check if this is a video file by extension
+		if isVideoFile(filename) {
+			// Convert to Hugo video shortcode
+			// {{< video src="filename.mp4" >}}
+			return fmt.Sprintf(`{{< video src="%s" >}}`, filename)
+		}
+		
+		// For images, use simplified markdown syntax
+		// "![alt](../assets/image.jpg)" -> "![alt](image.jpg)"
+		return fmt.Sprintf("![%s](%s)", altText, filename)
+	})
+	
+	return result
 }
 
 // ProcessHeaderImage copies the header image and renames it to "featured".
@@ -150,4 +172,43 @@ func (p *ImageProcessor) copyFile(src, dst string) {
 	io.Copy(out, in)
 	
 	// Note: In production code, you might want to check the error from io.Copy
+}
+
+// isVideoFile checks if a filename has a video file extension.
+// This function determines whether a file should be treated as a video
+// and converted to Hugo's video shortcode format.
+// Parameters:
+//   filename: The name of the file to check
+// Returns:
+//   bool: true if it's a video file, false otherwise
+func isVideoFile(filename string) bool {
+	// Get the file extension in lowercase
+	// filepath.Ext returns the extension including the dot (e.g., ".mp4")
+	// strings.ToLower converts to lowercase for case-insensitive comparison
+	ext := strings.ToLower(filepath.Ext(filename))
+	
+	// List of common video file extensions
+	// Check if the extension matches any of these
+	videoExtensions := []string{
+		".mp4",   // MPEG-4 video
+		".mov",   // QuickTime movie
+		".avi",   // Audio Video Interleave
+		".wmv",   // Windows Media Video
+		".flv",   // Flash Video
+		".webm",  // WebM video
+		".mkv",   // Matroska video
+		".m4v",   // MPEG-4 video file
+		".mpg",   // MPEG video
+		".mpeg",  // MPEG video
+	}
+	
+	// Check if the extension is in our list
+	for _, videoExt := range videoExtensions {
+		if ext == videoExt {
+			return true // It's a video file
+		}
+	}
+	
+	// Not a video file
+	return false
 }

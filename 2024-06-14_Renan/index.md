@@ -42,6 +42,6 @@ We sail back to Platja des Jondal. The plan was to continue sailing around Ibiza
 
 Once we anchor in Jondal, we need to go ashore because we've run out of essentials: beer and cigarettes. Renan shows me how to operate the dinghy and lets me drive. It’s terrifying and, due to the waves, not as easy as it looks.
 
-![dingy.mp4](dingy_1769020184515_0.mp4)
+{{< video src="dingy_1769020184515_0.mp4" >}}
 
 After dinner, Renan leaves us to play dominoes with his friends. Once again, he returns at dawn.
