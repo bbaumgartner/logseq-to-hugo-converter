@@ -200,6 +200,108 @@ header:: ![image](../assets/header.jpg)
 
 ## Software Design
 
+The converter uses the **Strategy Pattern** for flexible blog post extraction from different Logseq formats.
+
+### Architecture Diagram
+
+```plantuml
+@startuml
+!theme plain
+
+package "Core Types" {
+  class BlogMeta {
+    +Date: string
+    +Title: string
+    +Author: string
+    +Header: string
+    +Summary: string
+    +Status: string
+  }
+  
+  class BlogPost {
+    +Meta: BlogMeta
+    +Content: []string
+  }
+}
+
+interface BlogExtractor {
+  +Extract(doc, source) (*BlogPost, bool)
+}
+
+package "Extraction Strategies" {
+  class NestedListExtractor {
+    -parser: MetadataParser
+    +Extract(doc, source) (*BlogPost, bool)
+  }
+  
+  class TopLevelMetadataExtractor {
+    -parser: MetadataParser
+    +Extract(doc, source) (*BlogPost, bool)
+  }
+}
+
+package "Processing" {
+  class MetadataParser {
+    -regex: Regexp
+    +Parse(lines) BlogMeta
+    -setField(meta, key, value)
+  }
+  
+  class ImageProcessor {
+    -inputDir: string
+    -outputDir: string
+    +ProcessContent(content) string
+    +ProcessHeaderImage(path)
+  }
+  
+  class HugoWriter {
+    -outputDir: string
+    +Write(meta, content) error
+  }
+}
+
+class BlogConverter {
+  -extractors: []BlogExtractor
+  -outputBasePath: string
+  +Convert(inputPath) (string, error)
+  -extractBlogPost(doc, source)
+  -createOutputDir(meta)
+  -buildContent(blocks)
+}
+
+BlogExtractor <|.. NestedListExtractor
+BlogExtractor <|.. TopLevelMetadataExtractor
+BlogConverter o--> BlogExtractor : uses
+NestedListExtractor --> MetadataParser : uses
+TopLevelMetadataExtractor --> MetadataParser : uses
+BlogConverter --> ImageProcessor : creates
+BlogConverter --> HugoWriter : creates
+BlogPost *-- BlogMeta : contains
+BlogExtractor ..> BlogPost : returns
+MetadataParser ..> BlogMeta : creates
+
+note right of BlogConverter
+  Orchestrator that:
+  1. Reads markdown file
+  2. Tries extraction strategies
+  3. Validates status
+  4. Processes images
+  5. Writes Hugo output
+end note
+
+note right of BlogExtractor
+  Strategy Pattern:
+  Different extractors for
+  different Logseq formats
+end note
+
+@enduml
+```
+
+### Component Overview
+
+**File Structure:**
+```
 📁 logseq-to-hugo-converter/
 ├── main.go              ⭐ Main entry & orchestration (115 lines)
 ├── types.go             📋 Type definitions
@@ -210,3 +312,10 @@ header:: ![image](../assets/header.jpg)
 ├── main_test.go         ✅ Tests
 ├── watch-and-convert.sh 👀 macOS watcher
 └── watch-and-convert-linux.sh 🐧 Linux watcher
+```
+
+**Design Patterns:**
+- **Strategy Pattern**: Pluggable extraction strategies for different formats
+- **Single Responsibility**: Each component has one clear purpose
+- **Dependency Injection**: Components receive their dependencies
+- **Interface Segregation**: Small, focused interfaces
