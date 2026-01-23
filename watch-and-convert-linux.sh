@@ -144,15 +144,15 @@ convert_all_files() {
     fi
     
     while IFS= read -r -d '' md_file; do
-        ((file_count++))
+        file_count=$((file_count+1))
         echo -e "\n${YELLOW}Processing:${NC} $md_file"
         
         # Run the converter
         # Use 'go run .' to compile all Go files in the directory, not just main.go
         if go run . "$md_file" "$OUTPUT_DIR" 2>&1; then
-            ((success_count++))
+            success_count=$((success_count+1))
         else
-            ((error_count++))
+            error_count=$((error_count+1))
             echo -e "${RED}Failed to convert: $md_file${NC}"
         fi
     done < <(find "${find_paths[@]}" -type f -name "*.md" -print0)
