@@ -15,11 +15,17 @@ func TestConvertLogseqToHugo(t *testing.T) {
 	// Create a temporary directory for test output
 	tempDir := t.TempDir()
 	
-	// Run the conversion
-	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	// Run the conversion using the real convertFile function
+	outputPaths, err := convertFile(inputPath, tempDir)
 	if err != nil {
-		t.Fatalf("convertLogseqToHugo() error = %v", err)
+		t.Fatalf("convertFile() error = %v", err)
 	}
+	
+	if len(outputPaths) == 0 {
+		t.Fatalf("convertFile() returned no output paths")
+	}
+	
+	outputPath := outputPaths[0]
 	
 	// Verify the output directory was created with the expected name
 	expectedDirName := filepath.Base(expectedOutputDir)
@@ -110,7 +116,7 @@ func TestConvertLogseqToHugo_InvalidInput(t *testing.T) {
 	tempDir := t.TempDir()
 	
 	// Test with non-existent file
-	_, err := convertLogseqToHugo("nonexistent.md", tempDir)
+	_, err := convertFile("nonexistent.md", tempDir)
 	if err == nil {
 		t.Error("Expected error for non-existent file, got nil")
 	}
@@ -126,7 +132,7 @@ func TestConvertLogseqToHugo_NoBlogMarker(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	_, err := convertLogseqToHugo(testFile, tempDir)
+	_, err := convertFile(testFile, tempDir)
 	if err == nil {
 		t.Error("Expected error for file without blog marker, got nil")
 	}
@@ -154,14 +160,14 @@ func TestConvertLogseqToHugo_StatusNotOnline(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	
-	_, err := convertLogseqToHugo(testFile, tempDir)
-	if err == nil {
-		t.Error("Expected error for blog with status 'draft', got nil")
+	// convertFile should skip the draft post and return empty output paths
+	outputPaths, err := convertFile(testFile, tempDir)
+	if err != nil {
+		t.Fatalf("convertFile() error = %v, expected no error", err)
 	}
 	
-	expectedErrMsg := "only 'online' posts are converted"
-	if err != nil && !strings.Contains(err.Error(), expectedErrMsg) {
-		t.Errorf("Expected error message to contain %q, got %q", expectedErrMsg, err.Error())
+	if len(outputPaths) != 0 {
+		t.Errorf("Expected no output for blog with status 'draft', got %d outputs", len(outputPaths))
 	}
 }
 
@@ -172,11 +178,17 @@ func TestConvertLogseqToHugo_RenanExample(t *testing.T) {
 	inputPath := "examples/pages/Renan.md"
 	expectedOutputDir := "2024-06-14_Renan"
 	
-	// Run the conversion
-	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	// Run the conversion using the real convertFile function
+	outputPaths, err := convertFile(inputPath, tempDir)
 	if err != nil {
-		t.Fatalf("convertLogseqToHugo() error = %v", err)
+		t.Fatalf("convertFile() error = %v", err)
 	}
+	
+	if len(outputPaths) == 0 {
+		t.Fatalf("convertFile() returned no output paths")
+	}
+	
+	outputPath := outputPaths[0]
 	
 	// Verify the output directory was created with the expected name
 	expectedDirName := filepath.Base(expectedOutputDir)
@@ -219,11 +231,17 @@ func TestConvertLogseqToHugo_SKSExample(t *testing.T) {
 	// Create a temporary directory for test output
 	tempDir := t.TempDir()
 
-	// Run the conversion
-	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	// Run the conversion using the real convertFile function
+	outputPaths, err := convertFile(inputPath, tempDir)
 	if err != nil {
-		t.Fatalf("convertLogseqToHugo() error = %v", err)
+		t.Fatalf("convertFile() error = %v", err)
 	}
+
+	if len(outputPaths) == 0 {
+		t.Fatalf("convertFile() returned no output paths")
+	}
+
+	outputPath := outputPaths[0]
 
 	// Verify the output directory was created with the expected name
 	expectedDirName := filepath.Base(expectedOutputDir)
@@ -266,11 +284,17 @@ func TestConvertLogseqToHugo_DeepNesting(t *testing.T) {
 	// Create a temporary directory for test output
 	tempDir := t.TempDir()
 
-	// Run the conversion
-	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	// Run the conversion using the real convertFile function
+	outputPaths, err := convertFile(inputPath, tempDir)
 	if err != nil {
-		t.Fatalf("convertLogseqToHugo() error = %v", err)
+		t.Fatalf("convertFile() error = %v", err)
 	}
+
+	if len(outputPaths) == 0 {
+		t.Fatalf("convertFile() returned no output paths")
+	}
+
+	outputPath := outputPaths[0]
 
 	// Verify the output directory was created with the expected name
 	expectedDirName := filepath.Base(expectedOutputDir)
@@ -316,11 +340,10 @@ func TestConvertLogseqToHugo_MultiplePosts(t *testing.T) {
 	// Create a temporary directory for test output
 	tempDir := t.TempDir()
 
-	// Run the conversion using the new API that supports multiple posts
-	converter := NewBlogConverter(tempDir)
-	outputPaths, err := converter.Convert(inputPath)
+	// Run the conversion - convertFile handles multiple posts
+	outputPaths, err := convertFile(inputPath, tempDir)
 	if err != nil {
-		t.Fatalf("Convert() error = %v", err)
+		t.Fatalf("convertFile() error = %v", err)
 	}
 
 	// Verify we got exactly 2 output paths

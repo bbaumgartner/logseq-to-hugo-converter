@@ -20,18 +20,3 @@ type BlogPost struct {
 	Meta    BlogMeta // The metadata about the post (embedded struct)
 	Content []string // A slice (dynamic array) of content blocks/paragraphs
 }
-
-// BlogExtractor is an interface that defines how blog posts are extracted.
-// In Go, an interface is a contract that defines method signatures.
-// Any type that implements all methods in an interface automatically satisfies it.
-// This is the Strategy Pattern - different implementations can extract blogs differently.
-type BlogExtractor interface {
-	// Extract attempts to extract blog posts from a parsed markdown document.
-	// A single document can contain multiple blog posts.
-	// Parameters:
-	//   doc: The parsed markdown document (interface{} means "any type")
-	//   source: The raw markdown content as bytes
-	// Returns:
-	//   []*BlogPost: A slice of pointers to extracted blog posts (empty if none found)
-	Extract(doc interface{}, source []byte) []*BlogPost
-}

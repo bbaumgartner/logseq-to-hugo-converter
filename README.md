@@ -202,6 +202,10 @@ header:: ![image](../assets/header.jpg)
 
 ## Software Design
 
+### Architecture
+
+The converter uses a simple, functional approach with clear separation of concerns:
+
 ```plantuml
 @startuml
 !theme plain
@@ -222,19 +226,12 @@ package "Core Types" {
   }
 }
 
-interface BlogExtractor {
-  +Extract(doc, source) (*BlogPost, bool)
-}
-
-package "Extraction Strategies" {
-  class NestedListExtractor {
-    -parser: MetadataParser
-    +Extract(doc, source) (*BlogPost, bool)
-  }
-  
-  class TopLevelMetadataExtractor {
-    -parser: MetadataParser
-    +Extract(doc, source) (*BlogPost, bool)
+package "Extraction" {
+  class "extractor.go" as Extractor {
+    +extractBlogPosts(doc, source) []*BlogPost
+    +extractListPost(...) *BlogPost
+    +extractTopLevelPost(...) *BlogPost
+    +extractText(node, source) string
   }
 }
 
@@ -258,62 +255,63 @@ package "Processing" {
   }
 }
 
-class BlogConverter {
-  -extractors: []BlogExtractor
-  -outputBasePath: string
-  +Convert(inputPath) (string, error)
-  -extractBlogPost(doc, source)
-  -createOutputDir(meta)
-  -buildContent(blocks)
+package "Main" {
+  class "main.go" as Main {
+    +convertFile(inputPath, outputBasePath) ([]string, error)
+    -createOutputDir(basePath, meta) string
+    -buildContent(blocks) string
+  }
 }
 
-BlogExtractor <|.. NestedListExtractor
-BlogExtractor <|.. TopLevelMetadataExtractor
-BlogConverter o--> BlogExtractor : uses
-NestedListExtractor --> MetadataParser : uses
-TopLevelMetadataExtractor --> MetadataParser : uses
-BlogConverter --> ImageProcessor : creates
-BlogConverter --> HugoWriter : creates
+Main --> Extractor : uses
+Main --> ImageProcessor : creates
+Main --> HugoWriter : creates
+Extractor --> MetadataParser : uses
+Extractor ..> BlogPost : returns
 BlogPost *-- BlogMeta : contains
-BlogExtractor ..> BlogPost : returns
 MetadataParser ..> BlogMeta : creates
 
-note right of BlogConverter
-  Orchestrator that:
+note right of Main
+  Entry point that:
   1. Reads markdown file
-  2. Tries extraction strategies
-  3. Validates status
-  4. Processes images
+  2. Extracts all blog posts
+  3. Filters by status
+  4. Processes each post
   5. Writes Hugo output
 end note
 
-note right of BlogExtractor
-  Strategy Pattern:
-  Different extractors for
-  different Logseq formats
+note right of Extractor
+  Handles both formats:
+  - List-based (journals)
+  - Top-level metadata (pages)
+  Supports arbitrary nesting
 end note
 
 @enduml
 ```
 
-### Component Overview
+### File Structure
 
-**File Structure:**
 ```
 📁 logseq-to-hugo-converter/
-├── main.go              ⭐ Main entry & orchestration (115 lines)
-├── types.go             📋 Type definitions
-├── metadata.go          🏷️  Metadata parsing
-├── extractors.go        🔍 Blog extraction strategies
-├── processors.go        🖼️  Image processing
-├── writer.go            📝 Hugo format writing
-├── main_test.go         ✅ Tests
+├── main.go              ⭐ Entry point & conversion logic (144 lines)
+├── types.go             📋 Data structures (22 lines)
+├── metadata.go          🏷️  Metadata parsing (105 lines)
+├── extractor.go         🔍 Blog extraction (204 lines)
+├── processors.go        🖼️  Image/video processing (215 lines)
+├── writer.go            📝 Hugo format writing (119 lines)
+├── main_test.go         ✅ Tests (364 lines)
+├── test-nesting.md      📄 Deep nesting test
+├── test-multiple.md     📄 Multiple posts test
 ├── watch-and-convert.sh 👀 macOS watcher
 └── watch-and-convert-linux.sh 🐧 Linux watcher
 ```
 
-**Design Patterns:**
-- **Strategy Pattern**: Pluggable extraction strategies for different formats
-- **Single Responsibility**: Each component has one clear purpose
-- **Dependency Injection**: Components receive their dependencies
-- **Interface Segregation**: Small, focused interfaces
+**Total:** ~809 lines of code (excluding tests)
+
+### Design Principles
+
+- **Simplicity**: Direct function calls, no unnecessary abstractions
+- **Single Responsibility**: Each file has one clear purpose
+- **Extensibility**: Easy to add new metadata fields or processing steps
+- **Testability**: Pure functions with clear inputs/outputs
