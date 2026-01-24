@@ -26,12 +26,12 @@ type BlogPost struct {
 // Any type that implements all methods in an interface automatically satisfies it.
 // This is the Strategy Pattern - different implementations can extract blogs differently.
 type BlogExtractor interface {
-	// Extract attempts to extract a blog post from a parsed markdown document.
+	// Extract attempts to extract blog posts from a parsed markdown document.
+	// A single document can contain multiple blog posts.
 	// Parameters:
 	//   doc: The parsed markdown document (interface{} means "any type")
 	//   source: The raw markdown content as bytes
 	// Returns:
-	//   *BlogPost: A pointer to the extracted blog post (nil if not found)
-	//   bool: true if a blog post was found, false otherwise
-	Extract(doc interface{}, source []byte) (*BlogPost, bool)
+	//   []*BlogPost: A slice of pointers to extracted blog posts (empty if none found)
+	Extract(doc interface{}, source []byte) []*BlogPost
 }

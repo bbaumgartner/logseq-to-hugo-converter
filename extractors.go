@@ -39,12 +39,15 @@ func NewNestedListExtractor() *NestedListExtractor {
 //
 // Returns:
 //
-//	*BlogPost: Pointer to extracted blog post (nil if not found)
-//	bool: true if a blog post was found, false otherwise
-func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost, bool) {
-	// Variables to store the result
-	var post *BlogPost // Will hold the extracted post (nil by default)
-	found := false     // Flag to track if we found a blog post
+//	[]*BlogPost: A slice of pointers to all extracted blog posts (empty if none found)
+func (e *NestedListExtractor) Extract(doc interface{}, source []byte) []*BlogPost {
+	// Slice to collect all blog posts found in the document
+	var posts []*BlogPost
+	
+	// Track which lists we've already processed to avoid duplicates
+	// When we find a blog list, we might encounter nested lists within it
+	// We want to skip those to avoid extracting the same blog multiple times
+	processedLists := make(map[ast.Node]bool)
 
 	// Walk through the Abstract Syntax Tree (AST) of the markdown document
 	// ast.Walk visits every node in the tree
@@ -58,6 +61,11 @@ func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost
 			return ast.WalkContinue, nil // Continue to next node
 		}
 
+		// Skip if we've already processed this list
+		if processedLists[n] {
+			return ast.WalkContinue, nil
+		}
+
 		// Get the first item in the list
 		firstItem := n.FirstChild()
 
@@ -68,21 +76,52 @@ func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost
 		}
 
 		// We found a blog list! Extract it
-		post = e.extractFromList(n, source)
-		found = true
+		post := e.extractFromList(n, source)
+		posts = append(posts, post)
+		
+		// Mark this list and all its nested lists as processed
+		// This prevents us from extracting the same blog multiple times
+		ast.Walk(n, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
+			if entering && child.Kind() == ast.KindList {
+				processedLists[child] = true
+			}
+			return ast.WalkContinue, nil
+		})
 
-		// Stop walking the tree since we found what we need
-		return ast.WalkStop, nil
+		// Continue walking to find more blog posts (don't stop)
+		return ast.WalkContinue, nil
 	})
 
-	// Return the extracted post (or nil) and whether we found one
-	return post, found
+	// Return all extracted posts (may be empty if none found)
+	return posts
+}
+
+// findDeepestNestedList recursively finds the deepest nested list within a node.
+// This handles arbitrary nesting levels like: [[Category]] -> [[Subcategory]] -> [[Blog]] -> content
+// Returns the deepest list found, or the original node if no nested lists exist.
+func findDeepestNestedList(node ast.Node) ast.Node {
+	deepestList := node
+
+	// Walk through all children of the current node
+	for child := node.FirstChild(); child != nil; child = child.NextSibling() {
+		// If we find a list, recursively check if it has even deeper lists
+		if child.Kind() == ast.KindList {
+			candidateList := findDeepestNestedList(child)
+			// Update our deepest list to this new candidate
+			deepestList = candidateList
+			// Since we found a nested list, we should use that branch
+			break
+		}
+	}
+
+	return deepestList
 }
 
 // extractFromList extracts a blog post from a list node.
 // The list structure can be either:
 //   - [metadata item, content item 1, content item 2, ...] (flat structure)
 //   - [[Blog] item with nested list containing [metadata, content...]] (nested structure)
+//   - Multiple levels of nesting: [[Cat]] -> [[Subcat]] -> [[Blog]] -> [metadata, content...]
 // This is a helper method that does the actual extraction work.
 func (e *NestedListExtractor) extractFromList(listNode ast.Node, source []byte) *BlogPost {
 	// Initialize a new BlogPost with an empty Content slice
@@ -95,21 +134,19 @@ func (e *NestedListExtractor) extractFromList(listNode ast.Node, source []byte) 
 	// Counter to track which item we're processing
 	count := 0
 
-	// Check if the first item has a nested list
-	// This handles the case where metadata and content are in a nested structure
+	// Find the deepest nested list within the first item
+	// This handles arbitrary nesting levels (e.g., [[Category]] -> [[Blog]] -> content)
 	firstItem := listNode.FirstChild()
 	if firstItem != nil {
-		// Look for a nested list within the first item
-		for child := firstItem.FirstChild(); child != nil; child = child.NextSibling() {
-			if child.Kind() == ast.KindList {
-				// Found a nested list! Use it instead of the parent list
-				listNode = child
-				break
-			}
+		// Recursively find the deepest nested list
+		deepestList := findDeepestNestedList(firstItem)
+		// If we found a nested list, use it instead of the original
+		if deepestList != firstItem {
+			listNode = deepestList
 		}
 	}
 
-	// Iterate through all items in the list (either original or nested)
+	// Iterate through all items in the list (either original or deepest nested)
 	// FirstChild() gets the first item, NextSibling() moves to the next
 	// The loop continues while item is not nil
 	for item := listNode.FirstChild(); item != nil; item = item.NextSibling() {
@@ -160,7 +197,8 @@ func NewTopLevelMetadataExtractor() *TopLevelMetadataExtractor {
 
 // Extract implements the BlogExtractor interface for top-level metadata format.
 // It looks for metadata in paragraphs and content in lists.
-func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*BlogPost, bool) {
+// This format typically has only one blog post per file.
+func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) []*BlogPost {
 	// Slices to collect metadata and content
 	metadataLines := []string{} // Will hold "key:: value" lines
 	contentBlocks := []string{} // Will hold content paragraphs
@@ -221,7 +259,7 @@ func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*Bl
 
 	// If we never found "type:: blog", this isn't a blog post
 	if !foundBlogMarker {
-		return nil, false // Return nil and false (not found)
+		return []*BlogPost{} // Return empty slice (not found)
 	}
 
 	// Create the blog post from our collected data
@@ -235,8 +273,8 @@ func (e *TopLevelMetadataExtractor) Extract(doc interface{}, source []byte) (*Bl
 		post.Meta.Summary = strings.ReplaceAll(contentBlocks[0], "\n", " ")
 	}
 
-	// Return the blog post and true (found)
-	return post, true
+	// Return a slice containing the single blog post
+	return []*BlogPost{post}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

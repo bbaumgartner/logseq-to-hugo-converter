@@ -257,3 +257,109 @@ func TestConvertLogseqToHugo_SKSExample(t *testing.T) {
 		t.Errorf("index.md content mismatch.\nExpected:\n%s\n\nActual:\n%s", expectedStr, actualStr)
 	}
 }
+
+func TestConvertLogseqToHugo_DeepNesting(t *testing.T) {
+	// Setup: paths to test files
+	inputPath := "test-nesting.md"
+	expectedOutputDir := "2025-01-20_Deep_Nesting_Test"
+
+	// Create a temporary directory for test output
+	tempDir := t.TempDir()
+
+	// Run the conversion
+	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	if err != nil {
+		t.Fatalf("convertLogseqToHugo() error = %v", err)
+	}
+
+	// Verify the output directory was created with the expected name
+	expectedDirName := filepath.Base(expectedOutputDir)
+	actualDirName := filepath.Base(outputPath)
+	if actualDirName != expectedDirName {
+		t.Errorf("Output directory name = %v, want %v", actualDirName, expectedDirName)
+	}
+
+	// Verify index.md exists
+	indexPath := filepath.Join(outputPath, "index.md")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatalf("index.md does not exist at %s", indexPath)
+	}
+
+	// Compare index.md content with expected output
+	actualContent, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated index.md: %v", err)
+	}
+
+	expectedIndexPath := filepath.Join(expectedOutputDir, "index.md")
+	expectedContent, err := os.ReadFile(expectedIndexPath)
+	if err != nil {
+		t.Fatalf("Failed to read expected index.md: %v", err)
+	}
+
+	actualStr := strings.TrimSpace(string(actualContent))
+	expectedStr := strings.TrimSpace(string(expectedContent))
+
+	if actualStr != expectedStr {
+		t.Errorf("index.md content mismatch.\nExpected:\n%s\n\nActual:\n%s", expectedStr, actualStr)
+	}
+}
+
+func TestConvertLogseqToHugo_MultiplePosts(t *testing.T) {
+	// Setup: paths to test files
+	inputPath := "test-multiple.md"
+	expectedOutputDirs := []string{
+		"2025-01-21_First_Post",
+		"2025-01-22_Second_Post",
+	}
+
+	// Create a temporary directory for test output
+	tempDir := t.TempDir()
+
+	// Run the conversion using the new API that supports multiple posts
+	converter := NewBlogConverter(tempDir)
+	outputPaths, err := converter.Convert(inputPath)
+	if err != nil {
+		t.Fatalf("Convert() error = %v", err)
+	}
+
+	// Verify we got exactly 2 output paths
+	if len(outputPaths) != 2 {
+		t.Fatalf("Expected 2 output paths, got %d", len(outputPaths))
+	}
+
+	// Test each blog post
+	for i, expectedOutputDir := range expectedOutputDirs {
+		// Verify the output directory was created with the expected name
+		expectedDirName := filepath.Base(expectedOutputDir)
+		actualDirName := filepath.Base(outputPaths[i])
+		if actualDirName != expectedDirName {
+			t.Errorf("Output directory %d name = %v, want %v", i+1, actualDirName, expectedDirName)
+		}
+
+		// Verify index.md exists
+		indexPath := filepath.Join(outputPaths[i], "index.md")
+		if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+			t.Fatalf("index.md does not exist at %s", indexPath)
+		}
+
+		// Compare index.md content with expected output
+		actualContent, err := os.ReadFile(indexPath)
+		if err != nil {
+			t.Fatalf("Failed to read generated index.md for post %d: %v", i+1, err)
+		}
+
+		expectedIndexPath := filepath.Join(expectedOutputDir, "index.md")
+		expectedContent, err := os.ReadFile(expectedIndexPath)
+		if err != nil {
+			t.Fatalf("Failed to read expected index.md for post %d: %v", i+1, err)
+		}
+
+		actualStr := strings.TrimSpace(string(actualContent))
+		expectedStr := strings.TrimSpace(string(expectedContent))
+
+		if actualStr != expectedStr {
+			t.Errorf("Post %d index.md content mismatch.\nExpected:\n%s\n\nActual:\n%s", i+1, expectedStr, actualStr)
+		}
+	}
+}

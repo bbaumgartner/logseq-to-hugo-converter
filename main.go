@@ -37,10 +37,10 @@ func main() {
 	// os.Args[2] is the output directory path
 	converter := NewBlogConverter(os.Args[2])
 	
-	// Convert the input file
+	// Convert the input file (may contain multiple blog posts)
 	// os.Args[1] is the input file path
 	// := declares a new variable and infers its type
-	outputPath, err := converter.Convert(os.Args[1])
+	outputPaths, err := converter.Convert(os.Args[1])
 	
 	// Check if conversion failed
 	if err != nil {
@@ -50,8 +50,11 @@ func main() {
 		return // Exit the program
 	}
 
-	// Success! Print where the file was created
-	fmt.Printf("Created: %s/index.md\n", outputPath)
+	// Success! Print where each blog post was created
+	// range iterates over the slice of output paths
+	for _, outputPath := range outputPaths {
+		fmt.Printf("Created: %s/index.md\n", outputPath)
+	}
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -87,26 +90,27 @@ func NewBlogConverter(outputBasePath string) *BlogConverter {
 }
 
 // Convert performs the complete conversion of a Logseq markdown file to Hugo format.
+// A single file can contain multiple blog posts, all will be converted.
 // This is the main method that orchestrates all the steps:
 //   1. Read the input file
 //   2. Parse the markdown
-//   3. Extract blog post using strategies
-//   4. Validate the post
-//   5. Process images
-//   6. Write output
+//   3. Extract all blog posts using strategies
+//   4. Validate and process each post
+//   5. Process images for each post
+//   6. Write output for each post
 // Parameters:
 //   inputPath: Path to the Logseq markdown file
 // Returns:
-//   string: Path to the created output directory
+//   []string: Slice of paths to created output directories
 //   error: An error if something went wrong, nil if successful
-func (c *BlogConverter) Convert(inputPath string) (string, error) {
+func (c *BlogConverter) Convert(inputPath string) ([]string, error) {
 	// Step 1: Read the entire input file into memory
 	// os.ReadFile reads a file and returns its contents as bytes
 	source, err := os.ReadFile(inputPath)
 	if err != nil {
 		// If reading fails, wrap the error with context and return it
 		// %w wraps the original error so it can be unwrapped later
-		return "", fmt.Errorf("reading input file: %w", err)
+		return nil, fmt.Errorf("reading input file: %w", err)
 	}
 
 	// Step 2: Parse the markdown into an Abstract Syntax Tree (AST)
@@ -115,83 +119,99 @@ func (c *BlogConverter) Convert(inputPath string) (string, error) {
 	// .Parse() converts the text into an AST
 	doc := goldmark.New().Parser().Parse(text.NewReader(source))
 
-	// Step 3: Extract the blog post using our strategies
-	post, err := c.extractBlogPost(doc, source)
-	if err != nil {
-		return "", err // Return the error if extraction failed
+	// Step 3: Extract all blog posts using our strategies
+	posts := c.extractBlogPosts(doc, source)
+	if len(posts) == 0 {
+		return nil, fmt.Errorf("no blog post found with 'type:: blog' marker")
 	}
 
-	// Step 4: Validate that the post status is "online"
-	// We only convert posts marked as online, not drafts
-	if post.Meta.Status != "online" {
-		// Return an error explaining why we're not converting this post
-		return "", fmt.Errorf("blog post status is '%s', only 'online' posts are converted", post.Meta.Status)
-	}
+	// Slice to collect all output directory paths
+	var outputDirs []string
 
-	// Step 5: Create the output directory
-	// The directory name is based on the date and title
-	outputDir := c.createOutputDir(post.Meta)
-	
-	// os.MkdirAll creates the directory and all parent directories
-	// 0755 is the permission mode (rwxr-xr-x)
-	//   Owner: read, write, execute
-	//   Group: read, execute
-	//   Others: read, execute
-	if err := os.MkdirAll(outputDir, 0755); err != nil {
-		return "", fmt.Errorf("creating output directory: %w", err)
-	}
-
-	// Step 6: Build the content from content blocks
-	content := c.buildContent(post.Content)
-	
-	// Step 7: Process images
 	// Get the directory containing the input file (for resolving relative paths)
 	inputDir := filepath.Dir(inputPath)
-	
-	// Create an image processor
-	processor := NewImageProcessor(inputDir, outputDir)
-	
-	// Process all images in the content (copies files, updates references)
-	content = processor.ProcessContent(content)
-	
-	// Process the header/featured image
-	processor.ProcessHeaderImage(post.Meta.Header)
 
-	// Step 8: Write the Hugo-formatted output
-	writer := NewHugoWriter(outputDir)
-	if err := writer.Write(post.Meta, content); err != nil {
-		return "", err // Return error if writing fails
+	// Step 4-8: Process each blog post
+	for _, post := range posts {
+		// Step 4: Validate that the post status is "online"
+		// We only convert posts marked as online, not drafts
+		if post.Meta.Status != "online" {
+			// Skip this post, but continue with others
+			fmt.Printf("Skipping blog post '%s': status is '%s', only 'online' posts are converted\n", 
+				post.Meta.Title, post.Meta.Status)
+			continue
+		}
+
+		// Step 5: Create the output directory
+		// The directory name is based on the date and title
+		outputDir := c.createOutputDir(post.Meta)
+		
+		// os.MkdirAll creates the directory and all parent directories
+		// 0755 is the permission mode (rwxr-xr-x)
+		//   Owner: read, write, execute
+		//   Group: read, execute
+		//   Others: read, execute
+		if err := os.MkdirAll(outputDir, 0755); err != nil {
+			return nil, fmt.Errorf("creating output directory: %w", err)
+		}
+
+		// Step 6: Build the content from content blocks
+		content := c.buildContent(post.Content)
+		
+		// Step 7: Process images
+		// Create an image processor for this post
+		processor := NewImageProcessor(inputDir, outputDir)
+		
+		// Process all images in the content (copies files, updates references)
+		content = processor.ProcessContent(content)
+		
+		// Process the header/featured image
+		processor.ProcessHeaderImage(post.Meta.Header)
+
+		// Step 8: Write the Hugo-formatted output
+		writer := NewHugoWriter(outputDir)
+		if err := writer.Write(post.Meta, content); err != nil {
+			return nil, err // Return error if writing fails
+		}
+
+		// Add this output directory to our results
+		outputDirs = append(outputDirs, outputDir)
 	}
 
-	// Success! Return the output directory path
-	return outputDir, nil
+	// Success! Return all output directory paths
+	return outputDirs, nil
 }
 
-// extractBlogPost tries each extraction strategy until one succeeds.
+// extractBlogPosts tries each extraction strategy and collects all found blog posts.
 // This implements the Strategy Pattern - we try multiple strategies
-// until we find one that works.
+// and collect posts from all strategies that find any.
 // Parameters:
 //   doc: The parsed markdown AST
 //   source: The raw markdown content
 // Returns:
-//   *BlogPost: The extracted blog post
-//   error: An error if no strategy succeeded
-func (c *BlogConverter) extractBlogPost(doc interface{}, source []byte) (*BlogPost, error) {
+//   []*BlogPost: Slice of all extracted blog posts (may be empty)
+func (c *BlogConverter) extractBlogPosts(doc interface{}, source []byte) []*BlogPost {
+	// Slice to collect all found blog posts
+	var allPosts []*BlogPost
+
 	// Try each extractor in order
 	// range loops over slices, returning index and value
 	// _ discards the index since we don't need it
 	for _, extractor := range c.extractors {
 		// Try this extraction strategy
-		// Each extractor returns the post (or nil) and whether it found one
-		if post, found := extractor.Extract(doc, source); found {
-			// This strategy worked! Return the post
-			return post, nil
+		// Each extractor returns a slice of posts it found
+		posts := extractor.Extract(doc, source)
+		
+		// If this strategy found any posts, add them to our collection
+		if len(posts) > 0 {
+			allPosts = append(allPosts, posts...)
+			// Don't break - continue trying other strategies
+			// This allows mixing formats if needed
 		}
 	}
 	
-	// None of the strategies found a blog post
-	// Return nil for the post and an error message
-	return nil, fmt.Errorf("no blog post found with 'type:: blog' marker")
+	// Return all found posts (may be empty)
+	return allPosts
 }
 
 // createOutputDir builds the output directory path from metadata.
@@ -243,14 +263,44 @@ func (c *BlogConverter) buildContent(blocks []string) string {
 // convertLogseqToHugo provides backward compatibility with existing tests.
 // This function was the original API and is kept to avoid breaking tests.
 // New code should use NewBlogConverter().Convert() instead.
+// Note: If the file contains multiple blog posts, only the first one's path is returned.
 // Parameters:
 //   inputPath: Path to the Logseq markdown file
 //   outputPath: Directory where output should be written
 // Returns:
-//   string: Path to the output directory
+//   string: Path to the output directory (first post if multiple)
 //   error: An error if conversion failed
 func convertLogseqToHugo(inputPath, outputPath string) (string, error) {
-	// Create a new converter and run the conversion
-	// This is just a wrapper around the new API
-	return NewBlogConverter(outputPath).Convert(inputPath)
+	// Read and parse the file first to check status before calling Convert
+	source, err := os.ReadFile(inputPath)
+	if err != nil {
+		return "", fmt.Errorf("reading input file: %w", err)
+	}
+
+	doc := goldmark.New().Parser().Parse(text.NewReader(source))
+	converter := NewBlogConverter(outputPath)
+	posts := converter.extractBlogPosts(doc, source)
+	
+	if len(posts) == 0 {
+		return "", fmt.Errorf("no blog post found with 'type:: blog' marker")
+	}
+	
+	// Check if the first post has status != "online" for backward compatibility
+	if posts[0].Meta.Status != "online" {
+		return "", fmt.Errorf("blog post status is '%s', only 'online' posts are converted", posts[0].Meta.Status)
+	}
+	
+	// Now do the actual conversion
+	outputPaths, err := converter.Convert(inputPath)
+	if err != nil {
+		return "", err
+	}
+	
+	// Return the first output path for backward compatibility
+	if len(outputPaths) > 0 {
+		return outputPaths[0], nil
+	}
+	
+	// This shouldn't happen if there's no error, but handle it anyway
+	return "", fmt.Errorf("conversion succeeded but no output was generated")
 }
