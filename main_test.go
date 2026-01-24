@@ -210,3 +210,50 @@ func TestConvertLogseqToHugo_RenanExample(t *testing.T) {
 		t.Errorf("index.md content mismatch.\nExpected:\n%s\n\nActual:\n%s", expectedStr, actualStr)
 	}
 }
+
+func TestConvertLogseqToHugo_SKSExample(t *testing.T) {
+	// Setup: paths to test files
+	inputPath := "examples/journals/2026_01_23.md"
+	expectedOutputDir := "2025-09-13_SKS"
+
+	// Create a temporary directory for test output
+	tempDir := t.TempDir()
+
+	// Run the conversion
+	outputPath, err := convertLogseqToHugo(inputPath, tempDir)
+	if err != nil {
+		t.Fatalf("convertLogseqToHugo() error = %v", err)
+	}
+
+	// Verify the output directory was created with the expected name
+	expectedDirName := filepath.Base(expectedOutputDir)
+	actualDirName := filepath.Base(outputPath)
+	if actualDirName != expectedDirName {
+		t.Errorf("Output directory name = %v, want %v", actualDirName, expectedDirName)
+	}
+
+	// Verify index.md exists
+	indexPath := filepath.Join(outputPath, "index.md")
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		t.Fatalf("index.md does not exist at %s", indexPath)
+	}
+
+	// Compare index.md content with expected output
+	actualContent, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated index.md: %v", err)
+	}
+
+	expectedIndexPath := filepath.Join(expectedOutputDir, "index.md")
+	expectedContent, err := os.ReadFile(expectedIndexPath)
+	if err != nil {
+		t.Fatalf("Failed to read expected index.md: %v", err)
+	}
+
+	actualStr := strings.TrimSpace(string(actualContent))
+	expectedStr := strings.TrimSpace(string(expectedContent))
+
+	if actualStr != expectedStr {
+		t.Errorf("index.md content mismatch.\nExpected:\n%s\n\nActual:\n%s", expectedStr, actualStr)
+	}
+}

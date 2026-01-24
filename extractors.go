@@ -80,7 +80,9 @@ func (e *NestedListExtractor) Extract(doc interface{}, source []byte) (*BlogPost
 }
 
 // extractFromList extracts a blog post from a list node.
-// The list structure is: [metadata item, content item 1, content item 2, ...]
+// The list structure can be either:
+//   - [metadata item, content item 1, content item 2, ...] (flat structure)
+//   - [[Blog] item with nested list containing [metadata, content...]] (nested structure)
 // This is a helper method that does the actual extraction work.
 func (e *NestedListExtractor) extractFromList(listNode ast.Node, source []byte) *BlogPost {
 	// Initialize a new BlogPost with an empty Content slice
@@ -93,7 +95,21 @@ func (e *NestedListExtractor) extractFromList(listNode ast.Node, source []byte) 
 	// Counter to track which item we're processing
 	count := 0
 
-	// Iterate through all items in the list
+	// Check if the first item has a nested list
+	// This handles the case where metadata and content are in a nested structure
+	firstItem := listNode.FirstChild()
+	if firstItem != nil {
+		// Look for a nested list within the first item
+		for child := firstItem.FirstChild(); child != nil; child = child.NextSibling() {
+			if child.Kind() == ast.KindList {
+				// Found a nested list! Use it instead of the parent list
+				listNode = child
+				break
+			}
+		}
+	}
+
+	// Iterate through all items in the list (either original or nested)
 	// FirstChild() gets the first item, NextSibling() moves to the next
 	// The loop continues while item is not nil
 	for item := listNode.FirstChild(); item != nil; item = item.NextSibling() {
