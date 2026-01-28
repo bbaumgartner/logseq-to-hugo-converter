@@ -120,6 +120,16 @@ Input files must:
 - Frontmatter `title` field
 - All markdown content (paragraphs, lists, headings, etc.)
 
+### Automatic Additions
+- **Translation disclaimer**: Each translated post automatically includes a disclaimer at the end with a link back to the original. The disclaimer text is translated to match the target language.
+  
+  Example in English:
+  ```markdown
+  ---
+  
+  *This blog post has been automatically translated by a Large Language Model. See the [original blog post](index.de.md)*
+  ```
+
 ### Optimizations
 - **Summary optimization**: The `summary` field is automatically extracted from the first paragraph of the translated content instead of being translated separately. This saves tokens and speeds up translation since the summary and first paragraph are typically identical.
 
@@ -129,6 +139,15 @@ Input files must:
 - Hugo shortcodes (e.g., `{{< video src="..." >}}`)
 - File paths and URLs
 - Proper nouns (kept in original form unless commonly translated)
+
+### Disclaimer Languages
+
+The translation disclaimer is automatically provided in the following languages:
+- **English**: "This blog post has been automatically translated..."
+- **German**: "Dieser Blogbeitrag wurde automatisch übersetzt..."
+- **Spanish**: "Esta publicación de blog ha sido traducida automáticamente..."
+- **French**: "Cet article de blog a été traduit automatiquement..."
+- **Italian**: "Questo post del blog è stato tradotto automaticamente..."
 
 ## Cost Estimation
 

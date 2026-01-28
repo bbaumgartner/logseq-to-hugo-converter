@@ -145,6 +145,10 @@ func (t *Translator) TranslateMarkdownFile(ctx context.Context, mf *MarkdownFile
 		return nil, fmt.Errorf("translating content: %w", err)
 	}
 
+	// Add translation disclaimer at the end
+	disclaimer := getTranslationDisclaimer(targetLang.Code, mf.SourceLang)
+	translatedContent = translatedContent + "\n\n" + disclaimer
+
 	// Translate frontmatter (only title, not summary)
 	translatedFM, err := t.TranslateFrontmatter(ctx, &mf.Frontmatter, mf.SourceLang, targetLang.Code)
 	if err != nil {
@@ -162,4 +166,24 @@ func (t *Translator) TranslateMarkdownFile(ctx context.Context, mf *MarkdownFile
 		Content:     translatedContent,
 		SourceLang:  targetLang.Code,
 	}, nil
+}
+
+// getTranslationDisclaimer returns a translated disclaimer with link to original.
+func getTranslationDisclaimer(targetLang, sourceLang string) string {
+	originalLink := fmt.Sprintf("index.%s.md", sourceLang)
+
+	disclaimers := map[string]string{
+		"en": fmt.Sprintf("---\n\n*This blog post has been automatically translated by a Large Language Model. See the [original blog post](%s)*", originalLink),
+		"de": fmt.Sprintf("---\n\n*Dieser Blogbeitrag wurde automatisch von einem Large Language Model übersetzt. Siehe den [originalen Blogbeitrag](%s)*", originalLink),
+		"es": fmt.Sprintf("---\n\n*Esta publicación de blog ha sido traducida automáticamente por un Large Language Model. Consulta la [publicación original](%s)*", originalLink),
+		"fr": fmt.Sprintf("---\n\n*Cet article de blog a été traduit automatiquement par un Large Language Model. Voir l'[article original](%s)*", originalLink),
+		"it": fmt.Sprintf("---\n\n*Questo post del blog è stato tradotto automaticamente da un Large Language Model. Vedi il [post originale](%s)*", originalLink),
+	}
+
+	if disclaimer, ok := disclaimers[targetLang]; ok {
+		return disclaimer
+	}
+
+	// Fallback to English if language not found
+	return disclaimers["en"]
 }
