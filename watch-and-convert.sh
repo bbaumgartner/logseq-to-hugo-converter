@@ -116,10 +116,18 @@ git_commit_and_push() {
     cd - > /dev/null
 }
 
+# Flag to track if this is the first run
+FIRST_RUN=true
+
 # Function to convert all markdown files
 convert_all_files() {
-    echo -e "${YELLOW}Change detected! Waiting 30 seconds for additional changes...${NC}"
-    sleep 30
+    if [ "$FIRST_RUN" = true ]; then
+        echo -e "${GREEN}Running immediate conversion on startup...${NC}"
+        FIRST_RUN=false
+    else
+        echo -e "${YELLOW}Change detected! Waiting 30 minutes for additional changes...${NC}"
+        sleep 1800  # 30 minutes = 1800 seconds
+    fi
     
     echo -e "${GREEN}Converting all markdown files...${NC}"
     
