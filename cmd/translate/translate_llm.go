@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go"
@@ -79,7 +80,8 @@ IMPORTANT RULES:
 	return translation, nil
 }
 
-// TranslateFrontmatter translates the title and summary fields of the frontmatter.
+// TranslateFrontmatter translates only the title field of the frontmatter.
+// The summary will be extracted from the first paragraph of translated content.
 func (t *Translator) TranslateFrontmatter(ctx context.Context, fm *Frontmatter, sourceLang, targetLang string) (*Frontmatter, error) {
 	translated := *fm // Copy the frontmatter
 
@@ -92,33 +94,66 @@ func (t *Translator) TranslateFrontmatter(ctx context.Context, fm *Frontmatter, 
 		translated.Title = translatedTitle
 	}
 
-	// Translate summary
-	if fm.Summary != "" {
-		translatedSummary, err := t.TranslateText(ctx, fm.Summary, sourceLang, targetLang)
-		if err != nil {
-			return nil, fmt.Errorf("translating summary: %w", err)
-		}
-		translated.Summary = translatedSummary
-	}
+	// Note: Summary will be set from the first paragraph of translated content
+	// This is done in TranslateMarkdownFile to save tokens and speed up translation
 
 	return &translated, nil
+}
+
+// extractFirstParagraph extracts the first paragraph from markdown content.
+// A paragraph is defined as text before the first blank line or heading.
+func extractFirstParagraph(content string) string {
+	lines := strings.Split(content, "\n")
+	var firstParagraph []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Skip empty lines at the start
+		if len(firstParagraph) == 0 && trimmed == "" {
+			continue
+		}
+
+		// Stop at first blank line after we've started collecting
+		if len(firstParagraph) > 0 && trimmed == "" {
+			break
+		}
+
+		// Stop at headings (lines starting with #)
+		if strings.HasPrefix(trimmed, "#") {
+			break
+		}
+
+		// Stop at horizontal rules
+		if trimmed == "---" || trimmed == "***" || trimmed == "___" {
+			break
+		}
+
+		firstParagraph = append(firstParagraph, line)
+	}
+
+	return strings.TrimSpace(strings.Join(firstParagraph, " "))
 }
 
 // TranslateMarkdownFile translates an entire markdown file to the target language.
 func (t *Translator) TranslateMarkdownFile(ctx context.Context, mf *MarkdownFile, targetLang Language) (*MarkdownFile, error) {
 	fmt.Printf("  → Translating to %s...", targetLang.Name)
 
-	// Translate frontmatter
+	// Translate content first
+	translatedContent, err := t.TranslateText(ctx, mf.Content, mf.SourceLang, targetLang.Code)
+	if err != nil {
+		return nil, fmt.Errorf("translating content: %w", err)
+	}
+
+	// Translate frontmatter (only title, not summary)
 	translatedFM, err := t.TranslateFrontmatter(ctx, &mf.Frontmatter, mf.SourceLang, targetLang.Code)
 	if err != nil {
 		return nil, fmt.Errorf("translating frontmatter: %w", err)
 	}
 
-	// Translate content
-	translatedContent, err := t.TranslateText(ctx, mf.Content, mf.SourceLang, targetLang.Code)
-	if err != nil {
-		return nil, fmt.Errorf("translating content: %w", err)
-	}
+	// Extract first paragraph from translated content and use as summary
+	// Note: Escaping is handled by SerializeToMarkdown when writing to file
+	translatedFM.Summary = extractFirstParagraph(translatedContent)
 
 	fmt.Println(" ✓")
 

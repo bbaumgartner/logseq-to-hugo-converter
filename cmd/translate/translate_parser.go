@@ -73,6 +73,15 @@ func ParseMarkdownFile(filePath string) (*MarkdownFile, error) {
 
 // detectLanguage extracts the language code from a filename like "index.de.md"
 func detectLanguage(filePath string) string {
+	// Supported language codes
+	supportedLangs := map[string]bool{
+		"en": true,
+		"de": true,
+		"es": true,
+		"fr": true,
+		"it": true,
+	}
+
 	// Extract just the filename
 	parts := strings.Split(filePath, "/")
 	filename := parts[len(parts)-1]
@@ -82,7 +91,11 @@ func detectLanguage(filePath string) string {
 		// Extract the language code (e.g., "de" from "index.de.md")
 		langPart := strings.TrimPrefix(filename, "index.")
 		langPart = strings.TrimSuffix(langPart, ".md")
-		return langPart
+
+		// Validate that it's a supported language
+		if supportedLangs[langPart] {
+			return langPart
+		}
 	}
 
 	return ""
@@ -95,18 +108,18 @@ func (mf *MarkdownFile) SerializeToMarkdown() string {
 	// Write frontmatter
 	buf.WriteString("+++\n")
 
-	// Manually format TOML to preserve order
-	buf.WriteString(fmt.Sprintf("date = %q\n", mf.Frontmatter.Date))
-	buf.WriteString(fmt.Sprintf("lastmod = %q\n", mf.Frontmatter.LastMod))
+	// Manually format TOML with proper escaping (same as writer.go)
+	buf.WriteString(fmt.Sprintf("date = \"%s\"\n", escapeTomlString(mf.Frontmatter.Date)))
+	buf.WriteString(fmt.Sprintf("lastmod = \"%s\"\n", escapeTomlString(mf.Frontmatter.LastMod)))
 	buf.WriteString(fmt.Sprintf("draft = %t\n", mf.Frontmatter.Draft))
-	buf.WriteString(fmt.Sprintf("title = %q\n", mf.Frontmatter.Title))
-	buf.WriteString(fmt.Sprintf("summary = %q\n", mf.Frontmatter.Summary))
+	buf.WriteString(fmt.Sprintf("title = \"%s\"\n", escapeTomlString(mf.Frontmatter.Title)))
+	buf.WriteString(fmt.Sprintf("summary = \"%s\"\n", escapeTomlString(mf.Frontmatter.Summary)))
 
 	// Write params section
 	if len(mf.Frontmatter.Params) > 0 {
 		buf.WriteString("[params]\n")
 		for key, value := range mf.Frontmatter.Params {
-			buf.WriteString(fmt.Sprintf("  %s = %q\n", key, value))
+			buf.WriteString(fmt.Sprintf("  %s = \"%s\"\n", key, escapeTomlString(value)))
 		}
 	}
 
@@ -117,6 +130,16 @@ func (mf *MarkdownFile) SerializeToMarkdown() string {
 	buf.WriteString("\n")
 
 	return buf.String()
+}
+
+// escapeTomlString escapes special characters for TOML string values.
+// TOML requires double quotes and backslashes to be escaped.
+func escapeTomlString(s string) string {
+	// First, escape backslashes (must be done first!)
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	// Then, escape double quotes
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return s
 }
 
 // GetTargetLanguages returns all supported languages except the source language.
