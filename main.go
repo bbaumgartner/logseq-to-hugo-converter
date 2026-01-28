@@ -21,21 +21,27 @@ func main() {
 	outputBasePath := os.Args[2]
 
 	// Convert the file
-	outputPaths, err := convertFile(inputPath, outputBasePath)
+	outputs, err := convertFile(inputPath, outputBasePath)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
 	}
 
 	// Print success messages
-	for _, outputPath := range outputPaths {
-		fmt.Printf("Created: %s/index.md\n", outputPath)
+	for _, output := range outputs {
+		fmt.Printf("Created: %s/%s\n", output.Dir, output.Filename)
 	}
+}
+
+// OutputInfo contains information about a created output file.
+type OutputInfo struct {
+	Dir      string // The directory path
+	Filename string // The created filename (e.g., "index.de.md")
 }
 
 // convertFile converts a Logseq markdown file to Hugo format.
 // It finds all blog posts in the file and converts each one.
-func convertFile(inputPath, outputBasePath string) ([]string, error) {
+func convertFile(inputPath, outputBasePath string) ([]OutputInfo, error) {
 	// Read the input file
 	source, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -51,7 +57,7 @@ func convertFile(inputPath, outputBasePath string) ([]string, error) {
 		return nil, fmt.Errorf("no blog post found with 'type:: blog' marker")
 	}
 
-	var outputPaths []string
+	var outputs []OutputInfo
 	inputDir := filepath.Dir(inputPath)
 
 	// Convert each blog post
@@ -78,14 +84,15 @@ func convertFile(inputPath, outputBasePath string) ([]string, error) {
 
 		// Write output
 		writer := NewHugoWriter(outputDir)
-		if err := writer.Write(post.Meta, content); err != nil {
+		filename, err := writer.Write(post.Meta, content)
+		if err != nil {
 			return nil, err
 		}
 
-		outputPaths = append(outputPaths, outputDir)
+		outputs = append(outputs, OutputInfo{Dir: outputDir, Filename: filename})
 	}
 
-	return outputPaths, nil
+	return outputs, nil
 }
 
 // createOutputDir builds the output directory path from metadata.

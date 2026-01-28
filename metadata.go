@@ -3,7 +3,7 @@
 package main
 
 import (
-	"regexp" // Regular expressions package for pattern matching
+	"regexp"  // Regular expressions package for pattern matching
 	"strings" // String manipulation functions
 )
 
@@ -37,7 +37,7 @@ func (p *MetadataParser) Parse(lines []string) BlogMeta {
 	// Create an empty BlogMeta struct to fill with parsed data
 	// := is short variable declaration (type is inferred)
 	meta := BlogMeta{}
-	
+
 	// Loop through each line in the input slice
 	// range returns index and value for each element
 	// _ (underscore) discards the index since we don't need it
@@ -47,14 +47,14 @@ func (p *MetadataParser) Parse(lines []string) BlogMeta {
 		// match[0] = entire match, match[1] = first capture group, etc.
 		if match := p.regex.FindStringSubmatch(line); match != nil {
 			// nil means no match; if not nil, we found metadata
-			key := match[1]                  // First capture group (the key)
+			key := match[1]                      // First capture group (the key)
 			value := strings.TrimSpace(match[2]) // Second capture group (the value), trimmed
-			
+
 			// Set the appropriate field in the meta struct
 			p.setField(&meta, key, value) // &meta passes a pointer to meta
 		}
 	}
-	
+
 	// Return the completed metadata struct
 	return meta
 }
@@ -62,9 +62,10 @@ func (p *MetadataParser) Parse(lines []string) BlogMeta {
 // setField sets a specific field in the BlogMeta struct based on the key name.
 // This is a private method (lowercase first letter) only used internally.
 // Parameters:
-//   meta: pointer to the BlogMeta struct to modify
-//   key: the field name (e.g., "date", "title")
-//   value: the value to set
+//
+//	meta: pointer to the BlogMeta struct to modify
+//	key: the field name (e.g., "date", "title")
+//	value: the value to set
 func (p *MetadataParser) setField(meta *BlogMeta, key, value string) {
 	// Switch statement checks the key and sets the appropriate field
 	// In Go, switch doesn't need break statements - it exits after one match
@@ -80,7 +81,9 @@ func (p *MetadataParser) setField(meta *BlogMeta, key, value string) {
 		meta.Header = extractPath(value)
 	case "status":
 		meta.Status = value // Set the Status field (e.g., "online")
-	// If the key doesn't match any case, do nothing (ignore it)
+	case "language":
+		meta.Language = value // Set the Language field (e.g., "german", "english")
+		// If the key doesn't match any case, do nothing (ignore it)
 	}
 }
 
@@ -92,14 +95,14 @@ func extractPath(raw string) string {
 	// \( and \) are escaped parentheses (literal characters)
 	// (.*?) captures everything inside (non-greedy)
 	re := regexp.MustCompile(`\((.*?)\)`)
-	
+
 	// Try to find a match
 	if match := re.FindStringSubmatch(raw); len(match) > 1 {
 		// match[0] = entire match including parentheses
 		// match[1] = captured text inside parentheses
 		return match[1] // Return the path
 	}
-	
+
 	// If no parentheses found, return the original string
 	return raw
 }

@@ -6,12 +6,13 @@ package main
 // In Go, a struct is a collection of fields grouped together.
 // The fields use uppercase first letters, which makes them "exported" (publicly accessible).
 type BlogMeta struct {
-	Date    string // Publication date in YYYY-MM-DD format
-	Title   string // The title of the blog post
-	Author  string // Name of the author
-	Header  string // Path to the header/featured image
-	Summary string // Short summary or excerpt of the post
-	Status  string // Publication status (e.g., "online", "draft")
+	Date     string // Publication date in YYYY-MM-DD format
+	Title    string // The title of the blog post
+	Author   string // Name of the author
+	Header   string // Path to the header/featured image
+	Summary  string // Short summary or excerpt of the post
+	Status   string // Publication status (e.g., "online", "draft")
+	Language string // Language of the post (e.g., "german", "english")
 }
 
 // BlogPost represents a complete blog post with both metadata and content.

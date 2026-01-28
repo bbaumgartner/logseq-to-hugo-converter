@@ -22,38 +22,73 @@ type HugoWriter struct {
 // NewHugoWriter creates a new HugoWriter instance.
 // This is a constructor function that initializes the writer.
 // Parameters:
-//   outputDir: The directory where Hugo files should be written
+//
+//	outputDir: The directory where Hugo files should be written
+//
 // Returns:
-//   *HugoWriter: A pointer to the new writer instance
+//
+//	*HugoWriter: A pointer to the new writer instance
 func NewHugoWriter(outputDir string) *HugoWriter {
 	// Return a pointer to a new HugoWriter struct
 	// The & operator creates a pointer to the struct
 	return &HugoWriter{outputDir: outputDir}
 }
 
-// Write creates an index.md file with Hugo-formatted content.
-// This method generates the front matter and writes the complete file.
+// getFilename determines the correct filename based on the language.
 // Parameters:
-//   meta: BlogMeta struct containing all the metadata
-//   content: The processed blog content (markdown text)
+//
+//	language: The language code from metadata (e.g., "german", "english")
+//
 // Returns:
-//   error: An error if something went wrong, nil if successful
-func (w *HugoWriter) Write(meta BlogMeta, content string) error {
-	// Build the full path to the index.md file
+//
+//	string: The filename to use (e.g., "index.de.md", "index.en.md")
+func (w *HugoWriter) getFilename(language string) string {
+	// Normalize language to lowercase for case-insensitive comparison
+	language = strings.ToLower(strings.TrimSpace(language))
+
+	switch language {
+	case "german":
+		return "index.de.md"
+	case "english":
+		return "index.en.md"
+	default:
+		// Default to German if no language is specified
+		return "index.de.md"
+	}
+}
+
+// Write creates an index file with Hugo-formatted content.
+// This method generates the front matter and writes the complete file.
+// The filename is determined by the language metadata.
+// Parameters:
+//
+//	meta: BlogMeta struct containing all the metadata
+//	content: The processed blog content (markdown text)
+//
+// Returns:
+//
+//	filename: The name of the file created (e.g., "index.de.md")
+//	error: An error if something went wrong, nil if successful
+func (w *HugoWriter) Write(meta BlogMeta, content string) (string, error) {
+	// Determine the filename based on the language
+	// Default to index.de.md if no language is set
+	filename := w.getFilename(meta.Language)
+
+	// Build the full path to the index file
 	// filepath.Join combines directory and filename with correct separator
-	indexPath := filepath.Join(w.outputDir, "index.md")
-	
-	// Create (or overwrite) the index.md file
+	indexPath := filepath.Join(w.outputDir, filename)
+
+	// Create (or overwrite) the index file
 	// os.Create creates a new file or truncates an existing one
 	f, err := os.Create(indexPath)
-	
+
 	// Check if file creation failed
 	if err != nil {
 		// Return a formatted error with context
 		// %w wraps the original error, %s is string formatting
-		return fmt.Errorf("creating index.md: %w", err)
+		return "", fmt.Errorf("creating %s: %w", filename, err)
 	}
-	
+
 	// Defer closing the file until the function exits
 	// This ensures the file is always closed, even if an error occurs
 	defer f.Close()
@@ -65,15 +100,15 @@ func (w *HugoWriter) Write(meta BlogMeta, content string) error {
 	// The %s placeholders are replaced with the actual values
 	frontMatter := fmt.Sprintf(
 		// Each line in this string becomes part of the front matter
-		"+++\n"+                              // Opening delimiter
-		"date = \"%s\"\n"+                    // Publication date (double quotes)
-		"lastmod = \"%s\"\n"+                 // Last modified date (same as date)
-		"draft = false\n"+                    // Not a draft (published)
-		"title = \"%s\"\n"+                   // Post title (escaped)
-		"summary = \"%s\"\n"+                 // Post summary/excerpt (escaped)
-		"[params]\n"+                         // Custom parameters section
-		"  author = \"%s\"\n"+                // Author name (indented under params)
-		"+++\n\n",                            // Closing delimiter + blank line
+		"+++\n"+ // Opening delimiter
+			"date = \"%s\"\n"+ // Publication date (double quotes)
+			"lastmod = \"%s\"\n"+ // Last modified date (same as date)
+			"draft = false\n"+ // Not a draft (published)
+			"title = \"%s\"\n"+ // Post title (escaped)
+			"summary = \"%s\"\n"+ // Post summary/excerpt (escaped)
+			"[params]\n"+ // Custom parameters section
+			"  author = \"%s\"\n"+ // Author name (indented under params)
+			"+++\n\n", // Closing delimiter + blank line
 		escapeTomlString(meta.Date),    // Escape date
 		escapeTomlString(meta.Date),    // Escape lastmod
 		escapeTomlString(meta.Title),   // Escape title
@@ -85,35 +120,38 @@ func (w *HugoWriter) Write(meta BlogMeta, content string) error {
 	// f.WriteString writes a string to the file
 	// We concatenate the front matter, content, and a final newline
 	_, err = f.WriteString(frontMatter + content + "\n")
-	
+
 	// Check if writing failed
 	if err != nil {
 		// Return a formatted error
-		return fmt.Errorf("writing content: %w", err)
+		return "", fmt.Errorf("writing content: %w", err)
 	}
 
-	// Success! Return nil (no error)
+	// Success! Return the filename and nil (no error)
 	// In Go, functions often return error as the last return value
 	// nil means "no error"
-	return nil
+	return filename, nil
 }
 
 // escapeTomlString escapes special characters for TOML string values.
 // TOML requires double quotes to be escaped with a backslash.
 // It also escapes backslashes themselves to avoid ambiguity.
 // Parameters:
-//   s: The string to escape
+//
+//	s: The string to escape
+//
 // Returns:
-//   string: The escaped string safe for TOML
+//
+//	string: The escaped string safe for TOML
 func escapeTomlString(s string) string {
 	// First, escape backslashes (must be done first!)
 	// If we do this last, we'd escape the backslashes we just added
 	s = strings.ReplaceAll(s, `\`, `\\`)
-	
+
 	// Then, escape double quotes
 	// \" becomes \\\" in the TOML (backslash + escaped quote)
 	s = strings.ReplaceAll(s, `"`, `\"`)
-	
+
 	// Return the escaped string
 	return s
 }
