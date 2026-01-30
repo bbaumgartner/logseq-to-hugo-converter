@@ -6,6 +6,9 @@
 
 set -e
 
+# Store the directory where this script is located (the converter repository)
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
 # Colors for output
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -39,10 +42,21 @@ else
     exit 1
 fi
 
+# Parse -try flag
+TRY_MODE=false
+if [ "$1" = "-try" ]; then
+    TRY_MODE=true
+    shift
+fi
+
 # Check parameters
 if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
-    echo -e "${RED}Usage: $0 <input_directory> <output_directory> [git_repo_directory]${NC}"
+    echo -e "${RED}Usage: $0 [-try] <input_directory> <output_directory> [git_repo_directory]${NC}"
     echo "Example: $0 ./logseq/journals ./hugo/content/posts ./hugo"
+    echo "Example: $0 -try ./logseq/journals ./hugo/content/posts ./hugo"
+    echo ""
+    echo "Options:"
+    echo "  -try    Do everything except git push (useful for testing)"
     echo ""
     echo "The optional git_repo_directory will be used to automatically commit and push changes."
     exit 1
@@ -95,7 +109,11 @@ echo -e "Input directory: ${YELLOW}$INPUT_DIR${NC}"
 echo -e "Watching subdirectories: ${YELLOW}${WATCH_DIRS[*]}${NC}"
 echo -e "Output directory: ${YELLOW}$OUTPUT_DIR${NC}"
 if [ -n "$GIT_REPO_DIR" ]; then
-    echo -e "Git repository: ${YELLOW}$GIT_REPO_DIR${NC} ${GREEN}(auto-commit enabled)${NC}"
+    if [ "$TRY_MODE" = true ]; then
+        echo -e "Git repository: ${YELLOW}$GIT_REPO_DIR${NC} ${YELLOW}(try mode: commit only, no push)${NC}"
+    else
+        echo -e "Git repository: ${YELLOW}$GIT_REPO_DIR${NC} ${GREEN}(auto-commit enabled)${NC}"
+    fi
 else
     echo -e "Git repository: ${YELLOW}disabled${NC}"
 fi
@@ -122,15 +140,98 @@ git_commit_and_push() {
         # Commit with message
         git commit -m "automatic change by logseq-to-hugo-converter"
         
-        # Push to remote
-        echo -e "${YELLOW}Pushing to remote...${NC}"
-        if git push; then
-            echo -e "${GREEN}Successfully pushed changes to remote${NC}"
+        # Push to remote (unless in try mode)
+        if [ "$TRY_MODE" = true ]; then
+            echo -e "${YELLOW}[TRY MODE] Skipping git push - changes are committed locally only${NC}"
         else
-            echo -e "${RED}Failed to push changes${NC}"
+            echo -e "${YELLOW}Pushing to remote...${NC}"
+            if git push; then
+                echo -e "${GREEN}Successfully pushed changes to remote${NC}"
+            else
+                echo -e "${RED}Failed to push changes${NC}"
+            fi
         fi
     else
         echo -e "${YELLOW}No git changes detected${NC}"
+    fi
+    
+    # Return to original directory
+    cd - > /dev/null
+}
+
+# Function to translate changed markdown files
+translate_changed_files() {
+    if [ -z "$GIT_REPO_DIR" ]; then
+        return
+    fi
+    
+    echo ""
+    echo -e "${YELLOW}🌍 Translating changed markdown files...${NC}"
+    
+    cd "$GIT_REPO_DIR"
+    
+    # Get list of new or modified .md files using git status --porcelain
+    # Format: XY filename
+    # A  = new file (staged)
+    # M  = modified (staged)
+    #  M = modified (unstaged)
+    # MM = modified, staged, then modified again
+    changed_files=()
+    while IFS= read -r line; do
+        changed_files+=("$line")
+    done < <(git status --porcelain | grep -E '^(A |M | M|MM).*\.md$' | cut -c4-)
+    
+    if [ ${#changed_files[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No .md files to translate${NC}"
+        cd - > /dev/null
+        return
+    fi
+    
+    # Filter for files that match index.<lang>.md pattern
+    translate_files=()
+    for file in "${changed_files[@]}"; do
+        basename=$(basename "$file")
+        if [[ "$basename" =~ ^index\.[a-z]{2}\.md$ ]]; then
+            translate_files+=("$file")
+        fi
+    done
+    
+    if [ ${#translate_files[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No index.<lang>.md files to translate${NC}"
+        cd - > /dev/null
+        return
+    fi
+    
+    echo -e "Found ${GREEN}${#translate_files[@]}${NC} .md file(s) to translate:"
+    for file in "${translate_files[@]}"; do
+        echo -e "  - $file"
+    done
+    echo ""
+    
+    # Translate each file
+    success_count=0
+    error_count=0
+    
+    for file in "${translate_files[@]}"; do
+        echo -e "${YELLOW}Translating:${NC} $file"
+        
+        # Get absolute path for the file
+        abs_file_path="$GIT_REPO_DIR/$file"
+        
+        # Run the translate command from the converter directory
+        # Use package path to compile all source files (excluding tests)
+        if (cd "$SCRIPT_DIR" && go run ./cmd/translate "$abs_file_path") 2>&1; then
+            success_count=$((success_count+1))
+        else
+            error_count=$((error_count+1))
+            echo -e "${RED}  ✗ Failed to translate: $file${NC}"
+        fi
+        echo ""
+    done
+    
+    echo -e "${GREEN}✅ Translation complete: $success_count/${#translate_files[@]} files translated successfully${NC}"
+    if [ $error_count -gt 0 ]; then
+        echo -e "${RED}Errors: $error_count${NC}"
     fi
     
     # Return to original directory
@@ -175,9 +276,9 @@ convert_all_files() {
         file_count=$((file_count+1))
         echo -e "\n${YELLOW}Processing:${NC} $md_file"
         
-        # Run the converter
+        # Run the converter from the script's directory
         # Use 'go run .' to compile all Go files in the directory, not just main.go
-        if go run . "$md_file" "$OUTPUT_DIR" 2>&1; then
+        if (cd "$SCRIPT_DIR" && go run . "$md_file" "$OUTPUT_DIR") 2>&1; then
             success_count=$((success_count+1))
         else
             error_count=$((error_count+1))
@@ -196,6 +297,9 @@ convert_all_files() {
         echo -e "Errors: $error_count"
     fi
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    
+    # Translate changed files before committing
+    translate_changed_files
     
     # Commit and push changes if git repository is configured
     git_commit_and_push

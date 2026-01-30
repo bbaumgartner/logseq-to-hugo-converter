@@ -1,5 +1,5 @@
 # logseq-to-hugo-converter
-Takes a logseq md file and converts special annotated lists to a blog post ready to be served with HUGO.
+Takes a logseq md file and converts special annotated lists to a blog post ready to be served with HUGO. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian).
 
 We use logseq for our log book and wanted to also be able to create blog post right out of the log book. See https://sailingnomads.ch for the blog.
 
@@ -84,6 +84,27 @@ sudo apt install inotify-tools
 
 The script will automatically use the correct tool based on your OS.
 
+### OpenAI API Key (for automatic translation)
+
+To enable automatic translation of blog posts, you need to set the `OPENAI_API_KEY` environment variable:
+
+```bash
+export OPENAI_API_KEY='sk-...'
+```
+
+You can get an API key from [OpenAI](https://platform.openai.com/api-keys).
+
+**To make it persistent**, add the export command to your shell configuration:
+- macOS/Linux (bash): Add to `~/.bashrc` or `~/.bash_profile`
+- macOS/Linux (zsh): Add to `~/.zshrc`
+
+```bash
+echo "export OPENAI_API_KEY='sk-...'" >> ~/.zshrc
+source ~/.zshrc
+```
+
+**Note:** Translation is optional. If the API key is not set, the script will skip translation and only perform conversion.
+
 ### Running Tests
 
 To verify the installation and ensure everything is working correctly, run the test suite:
@@ -104,15 +125,20 @@ go test -v
 The `watch-and-convert.sh` script is cross-platform and works on both macOS and Linux. It automatically detects your operating system and uses the appropriate file watching tool (`fswatch` on macOS, `inotifywait` on Linux).
 
 ```bash
-./watch-and-convert.sh <input_directory> <output_directory> [git_repo_directory]
+./watch-and-convert.sh [-try] <input_directory> <output_directory> [git_repo_directory]
 ```
 
-**Example:**
+**Examples:**
 ```bash
+# Normal mode (with automatic translation and git push)
 ./watch-and-convert.sh /logseq-data ../hugo-data/content/posts/ ../hugo-data
+
+# Try mode (with automatic translation but no git push - useful for testing)
+./watch-and-convert.sh -try /logseq-data ../hugo-data/content/posts/ ../hugo-data
 ```
 
 **Parameters:**
+- `-try` (optional): Do everything except git push (useful for testing)
 - `input_directory`: Path to your Logseq data directory
 - `output_directory`: Where converted blog posts should be written
 - `git_repo_directory` (optional): Git repository to automatically commit and push changes to
@@ -121,7 +147,16 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 - Automatically detects OS (macOS/Linux) and uses the appropriate file watching tool
 - Monitors changes in `assets/`, `journals/`, and `pages/` subdirectories
 - Waits 30 minutes after detecting changes to batch multiple edits together
+- **Automatic translation**: Detects new or changed markdown files and translates them to all supported languages (English, German, Spanish, French, Italian)
 - Optionally commits and pushes changes to a git repository
+- Try mode (`-try` flag) for testing without pushing to remote
+
+**Workflow:**
+1. Watches for changes in Logseq directories
+2. Converts all markdown files to Hugo format
+3. **Automatically translates** any new or modified `index.<lang>.md` files using the translation tool
+4. Commits all changes (conversions + translations)
+5. Pushes to remote (unless `-try` flag is used)
 
 ### Manual Conversion
 
@@ -137,6 +172,40 @@ go run . examples/journals/2026_01_17.md ./output
 ```
 
 **Note:** Use `go run .` (dot) to compile all source files, not just `main.go`.
+
+### Automatic Translation
+
+When using the file watcher with a git repository configured, the script automatically translates any new or modified markdown files after conversion. This feature requires:
+
+1. **OpenAI API Key**: Set the `OPENAI_API_KEY` environment variable:
+   ```bash
+   export OPENAI_API_KEY='sk-...'
+   ```
+
+2. **File naming convention**: Only files matching the pattern `index.<lang>.md` are translated (e.g., `index.de.md`, `index.en.md`)
+
+3. **Supported languages**: English (en), German (de), Spanish (es), French (fr), Italian (it)
+
+**How it works:**
+- After converting files, the script runs `git status` to detect new or modified `.md` files
+- Only changed files are translated (avoiding expensive re-translations)
+- For each source file (e.g., `index.de.md`), translations are automatically created for all other languages
+- All translations are included in the same git commit
+
+**Manual translation:**
+You can also translate individual files manually:
+```bash
+go run ./cmd/translate/translate.go <input_file.md>
+```
+
+**Example:**
+```bash
+go run ./cmd/translate/translate.go 2025-09-13_SKS/index.de.md
+```
+
+This will create `index.en.md`, `index.es.md`, `index.fr.md`, and `index.it.md` in the same directory.
+
+For more details, see [TRANSLATION_TOOL.md](TRANSLATION_TOOL.md).
 
 ### Requirements for Blog Posts
 
@@ -296,19 +365,24 @@ end note
 
 ```
 📁 logseq-to-hugo-converter/
-├── main.go              ⭐ Entry point & conversion logic (144 lines)
+├── main.go              ⭐ Entry point & conversion logic (119 lines)
 ├── types.go             📋 Data structures (22 lines)
 ├── metadata.go          🏷️  Metadata parsing (105 lines)
 ├── extractor.go         🔍 Blog extraction (204 lines)
 ├── processors.go        🖼️  Image/video processing (215 lines)
-├── writer.go            📝 Hugo format writing (119 lines)
+├── writer.go            📝 Hugo format writing (158 lines)
 ├── main_test.go         ✅ Tests (364 lines)
+├── cmd/translate/       🌍 Translation tool
+│   ├── translate.go     📝 CLI entry point (127 lines)
+│   ├── translate_llm.go 🤖 OpenAI integration (190 lines)
+│   ├── translate_parser.go 📖 Markdown parsing (170 lines)
+│   └── translate_writer.go 💾 File writing (75 lines)
 ├── test-nesting.md      📄 Deep nesting test
 ├── test-multiple.md     📄 Multiple posts test
-└── watch-and-convert.sh 👀 Cross-platform file watcher (240 lines)
+└── watch-and-convert.sh 👀 File watcher + auto-translation (341 lines)
 ```
 
-**Total:** ~809 lines of code (excluding tests)
+**Total:** ~1,471 lines of code (excluding tests)
 
 ### Design Principles
 
