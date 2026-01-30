@@ -66,19 +66,23 @@ cd logseq-to-hugo-converter
 go mod download
 ```
 
-### Platform-Specific Tools
+### File Watching Tools
+
+The `watch-and-convert.sh` script automatically detects your operating system and uses the appropriate file watching tool. Install the tool for your platform:
 
 #### macOS
-Install `fswatch` for file watching:
+Install `fswatch`:
 ```bash
 brew install fswatch
 ```
 
 #### Linux/Ubuntu
-Install `inotify-tools` for file watching:
+Install `inotify-tools`:
 ```bash
 sudo apt install inotify-tools
 ```
+
+The script will automatically use the correct tool based on your OS.
 
 ### Running Tests
 
@@ -97,29 +101,27 @@ go test -v
 
 ### Running the File Watcher
 
-**On macOS:**
+The `watch-and-convert.sh` script is cross-platform and works on both macOS and Linux. It automatically detects your operating system and uses the appropriate file watching tool (`fswatch` on macOS, `inotifywait` on Linux).
+
 ```bash
 ./watch-and-convert.sh <input_directory> <output_directory> [git_repo_directory]
 ```
 
-**On Linux/Ubuntu:**
-```bash
-./watch-and-convert-linux.sh <input_directory> <output_directory> [git_repo_directory]
-```
-
 **Example:**
 ```bash
-# macOS
 ./watch-and-convert.sh /logseq-data ../hugo-data/content/posts/ ../hugo-data
-
-# Linux
-./watch-and-convert-linux.sh /logseq-data ../hugo-data/content/posts/ ../hugo-data
 ```
 
 **Parameters:**
 - `input_directory`: Path to your Logseq data directory
 - `output_directory`: Where converted blog posts should be written
 - `git_repo_directory` (optional): Git repository to automatically commit and push changes to
+
+**Features:**
+- Automatically detects OS (macOS/Linux) and uses the appropriate file watching tool
+- Monitors changes in `assets/`, `journals/`, and `pages/` subdirectories
+- Waits 30 minutes after detecting changes to batch multiple edits together
+- Optionally commits and pushes changes to a git repository
 
 ### Manual Conversion
 
@@ -303,8 +305,7 @@ end note
 ├── main_test.go         ✅ Tests (364 lines)
 ├── test-nesting.md      📄 Deep nesting test
 ├── test-multiple.md     📄 Multiple posts test
-├── watch-and-convert.sh 👀 macOS watcher
-└── watch-and-convert-linux.sh 🐧 Linux watcher
+└── watch-and-convert.sh 👀 Cross-platform file watcher (240 lines)
 ```
 
 **Total:** ~809 lines of code (excluding tests)

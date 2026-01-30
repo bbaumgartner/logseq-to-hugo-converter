@@ -2,6 +2,7 @@
 
 # watch-and-convert.sh
 # Watches a directory for changes and converts all .md files using the logseq-to-hugo converter
+# Cross-platform: supports both macOS (fswatch) and Linux (inotifywait)
 
 set -e
 
@@ -11,10 +12,30 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Check if fswatch is installed
-if ! command -v fswatch &> /dev/null; then
-    echo -e "${RED}Error: fswatch is not installed${NC}"
-    echo "Please install it with: brew install fswatch"
+# Detect OS and check for appropriate file watching tool
+OS_TYPE=$(uname)
+
+if [[ "$OS_TYPE" == "Darwin" ]]; then
+    # macOS
+    if ! command -v fswatch &> /dev/null; then
+        echo -e "${RED}Error: fswatch is not installed${NC}"
+        echo "Please install it with: brew install fswatch"
+        exit 1
+    fi
+    WATCH_TOOL="fswatch"
+    echo -e "${GREEN}Detected macOS - using fswatch${NC}"
+elif [[ "$OS_TYPE" == "Linux" ]]; then
+    # Linux
+    if ! command -v inotifywait &> /dev/null; then
+        echo -e "${RED}Error: inotifywait is not installed${NC}"
+        echo "Please install it with: sudo apt install inotify-tools"
+        exit 1
+    fi
+    WATCH_TOOL="inotifywait"
+    echo -e "${GREEN}Detected Linux - using inotifywait${NC}"
+else
+    echo -e "${RED}Error: Unsupported operating system: $OS_TYPE${NC}"
+    echo "This script supports macOS (Darwin) and Linux only."
     exit 1
 fi
 
@@ -151,15 +172,15 @@ convert_all_files() {
     fi
     
     while IFS= read -r -d '' md_file; do
-        ((file_count++))
+        file_count=$((file_count+1))
         echo -e "\n${YELLOW}Processing:${NC} $md_file"
         
         # Run the converter
         # Use 'go run .' to compile all Go files in the directory, not just main.go
         if go run . "$md_file" "$OUTPUT_DIR" 2>&1; then
-            ((success_count++))
+            success_count=$((success_count+1))
         else
-            ((error_count++))
+            error_count=$((error_count+1))
             echo -e "${RED}Failed to convert: $md_file${NC}"
         fi
     done < <(find "${find_paths[@]}" -type f -name "*.md" -print0)
@@ -188,7 +209,6 @@ echo -e "${YELLOW}Running initial conversion...${NC}"
 convert_all_files
 
 # Watch for changes and trigger conversion with debouncing
-# The -1 flag makes fswatch exit after first event, so we can debounce in our loop
 while true; do
     # Build list of directories to watch
     watch_paths=()
@@ -200,7 +220,15 @@ while true; do
     
     # Watch for any change in the watched directories
     if [ ${#watch_paths[@]} -gt 0 ]; then
-        fswatch -1 -r "${watch_paths[@]}" > /dev/null
+        # Use the appropriate file watching tool based on OS
+        if [[ "$WATCH_TOOL" == "fswatch" ]]; then
+            # macOS: -1 flag makes fswatch exit after first event, so we can debounce in our loop
+            fswatch -1 -r "${watch_paths[@]}" > /dev/null
+        else
+            # Linux: Wait for any file system event (modify, create, delete, move)
+            # -r: recursive, -e: events to watch, -q: quiet (don't print events)
+            inotifywait -r -e modify,create,delete,move -q "${watch_paths[@]}"
+        fi
         
         # When a change is detected, run the conversion
         convert_all_files
