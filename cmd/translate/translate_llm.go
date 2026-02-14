@@ -170,7 +170,7 @@ func (t *Translator) TranslateMarkdownFile(ctx context.Context, mf *MarkdownFile
 
 // getTranslationDisclaimer returns a translated disclaimer with link to original.
 func getTranslationDisclaimer(targetLang, sourceLang string) string {
-	originalLink := fmt.Sprintf("index.%s.md", sourceLang)
+	originalLink := fmt.Sprintf(`{{< relref path="." lang="%s" >}}`, sourceLang)
 
 	disclaimers := map[string]string{
 		"en": fmt.Sprintf("---\n\n*This blog post has been automatically translated by a Large Language Model. See the [original blog post](%s)*", originalLink),

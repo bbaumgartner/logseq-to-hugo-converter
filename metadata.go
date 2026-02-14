@@ -81,6 +81,8 @@ func (p *MetadataParser) setField(meta *BlogMeta, key, value string) {
 		meta.Header = extractPath(value)
 	case "status":
 		meta.Status = value // Set the Status field (e.g., "online")
+	case "summary":
+		meta.Summary = value // Set the Summary field (explicit summary from metadata)
 	case "language":
 		meta.Language = value // Set the Language field (e.g., "german", "english")
 		// If the key doesn't match any case, do nothing (ignore it)

@@ -51,6 +51,12 @@ func (w *HugoWriter) getFilename(language string) string {
 		return "index.de.md"
 	case "english":
 		return "index.en.md"
+	case "spanish":
+		return "index.es.md"
+	case "french":
+		return "index.fr.md"
+	case "italian":
+		return "index.it.md"
 	default:
 		// Default to German if no language is specified
 		return "index.de.md"
@@ -107,7 +113,7 @@ func (w *HugoWriter) Write(meta BlogMeta, content string) (string, error) {
 			"title = \"%s\"\n"+ // Post title (escaped)
 			"summary = \"%s\"\n"+ // Post summary/excerpt (escaped)
 			"[params]\n"+ // Custom parameters section
-			"  author = \"%s\"\n"+ // Author name (indented under params)
+			"  author =  \"%s\"\n"+ // Author name (indented under params)
 			"+++\n\n", // Closing delimiter + blank line
 		escapeTomlString(meta.Date),    // Escape date
 		escapeTomlString(meta.Date),    // Escape lastmod
@@ -151,6 +157,11 @@ func escapeTomlString(s string) string {
 	// Then, escape double quotes
 	// \" becomes \\\" in the TOML (backslash + escaped quote)
 	s = strings.ReplaceAll(s, `"`, `\"`)
+
+	// Escape control characters required by the TOML spec
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
 
 	// Return the escaped string
 	return s

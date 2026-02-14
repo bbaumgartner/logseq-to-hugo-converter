@@ -179,7 +179,7 @@ translate_changed_files() {
     changed_files=()
     while IFS= read -r line; do
         changed_files+=("$line")
-    done < <(git status --porcelain | grep -E '^(A |M | M|MM).*\.md$' | cut -c4-)
+    done < <(git status --porcelain | grep -E '^(A |M | M|MM|\?\?).*\.md$' | cut -c4-)
     
     if [ ${#changed_files[@]} -eq 0 ]; then
         echo -e "${YELLOW}No .md files to translate${NC}"

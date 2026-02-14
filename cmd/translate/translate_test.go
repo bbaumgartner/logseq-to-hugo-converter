@@ -206,6 +206,21 @@ func TestEscapeTomlString(t *testing.T) {
 			input: "",
 			want:  "",
 		},
+		{
+			name:  "Actual newline",
+			input: "Line one\nLine two",
+			want:  `Line one\nLine two`,
+		},
+		{
+			name:  "Actual tab",
+			input: "Before\tAfter",
+			want:  `Before\tAfter`,
+		},
+		{
+			name:  "Carriage return",
+			input: "Before\rAfter",
+			want:  `Before\rAfter`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -441,7 +456,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"Large Language Model",
 				"original blog post",
 			},
-			wantLink: "index.de.md",
+			wantLink: `relref path="." lang="de"`,
 		},
 		{
 			name:       "German disclaimer from English",
@@ -453,7 +468,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"Large Language Model",
 				"originalen Blogbeitrag",
 			},
-			wantLink: "index.en.md",
+			wantLink: `relref path="." lang="en"`,
 		},
 		{
 			name:       "Spanish disclaimer",
@@ -465,7 +480,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"Large Language Model",
 				"publicación original",
 			},
-			wantLink: "index.en.md",
+			wantLink: `relref path="." lang="en"`,
 		},
 		{
 			name:       "French disclaimer",
@@ -477,7 +492,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"Large Language Model",
 				"article original",
 			},
-			wantLink: "index.de.md",
+			wantLink: `relref path="." lang="de"`,
 		},
 		{
 			name:       "Italian disclaimer",
@@ -489,7 +504,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"Large Language Model",
 				"post originale",
 			},
-			wantLink: "index.en.md",
+			wantLink: `relref path="." lang="en"`,
 		},
 	}
 

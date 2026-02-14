@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -82,9 +83,8 @@ func detectLanguage(filePath string) string {
 		"it": true,
 	}
 
-	// Extract just the filename
-	parts := strings.Split(filePath, "/")
-	filename := parts[len(parts)-1]
+	// Extract just the filename (using filepath.Base for cross-platform support)
+	filename := filepath.Base(filePath)
 
 	// Look for pattern: index.XX.md
 	if strings.HasPrefix(filename, "index.") && strings.HasSuffix(filename, ".md") {
@@ -139,6 +139,10 @@ func escapeTomlString(s string) string {
 	s = strings.ReplaceAll(s, `\`, `\\`)
 	// Then, escape double quotes
 	s = strings.ReplaceAll(s, `"`, `\"`)
+	// Escape control characters required by the TOML spec
+	s = strings.ReplaceAll(s, "\n", `\n`)
+	s = strings.ReplaceAll(s, "\r", `\r`)
+	s = strings.ReplaceAll(s, "\t", `\t`)
 	return s
 }
 
