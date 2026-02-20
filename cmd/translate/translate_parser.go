@@ -76,11 +76,12 @@ func ParseMarkdownFile(filePath string) (*MarkdownFile, error) {
 func detectLanguage(filePath string) string {
 	// Supported language codes
 	supportedLangs := map[string]bool{
-		"en": true,
-		"de": true,
-		"es": true,
-		"fr": true,
-		"it": true,
+		"en":   true,
+		"de":   true,
+		"es":   true,
+		"fr":   true,
+		"it":   true,
+		"arrr": true,
 	}
 
 	// Extract just the filename (using filepath.Base for cross-platform support)
@@ -154,6 +155,7 @@ func GetTargetLanguages(sourceLang string) []Language {
 		{Code: "es", Name: "Spanish"},
 		{Code: "fr", Name: "French"},
 		{Code: "it", Name: "Italian"},
+		{Code: "arrr", Name: "Pirate Speak"},
 	}
 
 	var targets []Language

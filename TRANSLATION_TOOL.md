@@ -4,7 +4,7 @@ A standalone Go tool that translates Hugo markdown blog posts to multiple langua
 
 ## Features
 
-- Translates Hugo markdown files to Spanish, English, German, French, and Italian
+- Translates Hugo markdown files to Spanish, English, German, French, Italian, and Pirate Speak
 - Automatically detects source language from filename
 - Skips translating to the source language
 - Translates both frontmatter (title, summary) and content
@@ -51,19 +51,38 @@ source ~/.zshrc
 From the repository root:
 
 ```bash
-go run ./cmd/translate <path-to-index-file>
+go run ./cmd/translate <path-to-index-file> [--target <lang1,lang2,...>]
 ```
 
 Or if you've compiled the binary:
 
 ```bash
 cd cmd/translate
-./translate <path-to-index-file>
+./translate <path-to-index-file> [--target <lang1,lang2,...>]
 ```
+
+### `--target` Flag
+
+The optional `--target` flag restricts translation to a specific subset of languages, given as a comma-separated list of language codes. Without it, the tool translates to **all** supported languages except the source.
+
+```bash
+# Translate to all languages (default behaviour)
+go run ./cmd/translate 2025-09-13_SKS/index.de.md
+
+# Translate to one language only
+go run ./cmd/translate 2025-09-13_SKS/index.en.md --target arrr
+
+# Translate to several specific languages
+go run ./cmd/translate 2025-09-13_SKS/index.en.md --target es,fr,arrr
+```
+
+This is particularly useful when:
+- Adding a newly supported language to posts that already have other translations (avoids expensive re-translations)
+- Testing the output of a single language without waiting for all others
 
 ### Examples
 
-**Translate a German blog post:**
+**Translate a German blog post to all languages:**
 ```bash
 go run ./cmd/translate 2025-09-13_SKS/index.de.md
 ```
@@ -73,7 +92,7 @@ go run ./cmd/translate 2025-09-13_SKS/index.de.md
 📖 Parsing 2025-09-13_SKS/index.de.md...
 ✓ Detected source language: German
 
-🌍 Translating from German to 4 languages...
+🌍 Translating from German to 5 languages...
   → Translating to English... ✓
   ✓ Created: 2025-09-13_SKS/index.en.md
   → Translating to Spanish... ✓
@@ -82,16 +101,28 @@ go run ./cmd/translate 2025-09-13_SKS/index.de.md
   ✓ Created: 2025-09-13_SKS/index.fr.md
   → Translating to Italian... ✓
   ✓ Created: 2025-09-13_SKS/index.it.md
+  → Translating to Pirate Speak... ✓
+  ✓ Created: 2025-09-13_SKS/index.arrr.md
 
-✅ Successfully translated to 4/4 languages
+✅ Successfully translated to 5/5 languages
 ```
 
-**Translate an English blog post:**
+**Add only the Pirate Speak translation to an existing post:**
 ```bash
-go run ./cmd/translate 2024-06-14_Renan/index.en.md
+go run ./cmd/translate 2024-06-14_Renan/index.en.md --target arrr
 ```
 
-This will create German, Spanish, French, and Italian versions (skipping English since it's the source).
+**Output:**
+```
+📖 Parsing 2024-06-14_Renan/index.en.md...
+✓ Detected source language: English
+
+🌍 Translating from English to 1 languages...
+  → Translating to Pirate Speak... ✓
+  ✓ Created: 2024-06-14_Renan/index.arrr.md
+
+✅ Successfully translated to 1/1 languages
+```
 
 ## Input File Requirements
 
@@ -106,18 +137,19 @@ Input files must:
 
 ## Supported Languages
 
-| Language Code | Language Name |
-|---------------|---------------|
-| `en` | English |
-| `de` | German |
-| `es` | Spanish |
-| `fr` | French |
-| `it` | Italian |
+| Language Code | Language Name | Notes |
+|---------------|---------------|-------|
+| `en` | English | |
+| `de` | German | |
+| `es` | Spanish | |
+| `fr` | French | |
+| `it` | Italian | |
+| `arrr` | Pirate Speak | Rewrites English into over-the-top pirate dialect; title is kept from the English source unchanged |
 
 ## Translation Behavior
 
 ### What Gets Translated
-- Frontmatter `title` field
+- Frontmatter `title` field (for all languages except `arrr` — see below)
 - All markdown content (paragraphs, lists, headings, etc.)
 
 ### Automatic Additions
@@ -140,6 +172,15 @@ Input files must:
 - File paths and URLs
 - Proper nouns (kept in original form unless commonly translated)
 
+### Pirate Speak (`arrr`) Behaviour
+
+Pirate Speak is a special pseudo-language that rewrites English content in exaggerated pirate dialect rather than translating to a different natural language. It differs from the other targets in a few ways:
+
+- **Source language must be English** — the pirate prompt is tuned for English input
+- **Title is not rewritten** — the English title is kept as-is to avoid the model producing absurdly long pirate titles
+- **Higher model temperature** (0.9 vs 0.3) — produces more creative and unpredictable output
+- **Disclaimer is in pirate speak**: *"Arrr, this here blog post be rewritten in the tongue o' pirates by a Large Language Model, ye scallywag!"*
+
 ### Disclaimer Languages
 
 The translation disclaimer is automatically provided in the following languages:
@@ -148,6 +189,7 @@ The translation disclaimer is automatically provided in the following languages:
 - **Spanish**: "Esta publicación de blog ha sido traducida automáticamente..."
 - **French**: "Cet article de blog a été traduit automatiquement..."
 - **Italian**: "Questo post del blog è stato tradotto automaticamente..."
+- **Pirate Speak**: "Arrr, this here blog post be rewritten in the tongue o' pirates..."
 
 ## Cost Estimation
 
@@ -186,7 +228,7 @@ If you hit rate limits, the tool will automatically retry with exponential backo
 
 ### Batch Translation Script
 
-Create a script to translate multiple blog posts:
+Translate multiple blog posts to all languages:
 
 ```bash
 #!/bin/bash
@@ -199,7 +241,20 @@ for file in */index.de.md; do
 done
 ```
 
-Make it executable and run:
+Add a single new language to all existing posts (without re-translating the others):
+
+```bash
+#!/bin/bash
+# add_pirate_speak.sh
+
+for file in */index.en.md; do
+    echo "Adding Pirate Speak for $file..."
+    go run ./cmd/translate "$file" --target arrr
+    echo ""
+done
+```
+
+Make scripts executable and run:
 ```bash
 chmod +x translate_all.sh
 ./translate_all.sh
@@ -228,7 +283,7 @@ The translation tool is located in `cmd/translate/`:
 
 ### Model Configuration
 - Model: `gpt-4-turbo`
-- Temperature: 0.3 (deterministic translations)
+- Temperature: 0.3 for real-language translations (deterministic); 0.9 for Pirate Speak (creative)
 - Retry attempts: 3
 - Timeout: 10 minutes per translation run
 

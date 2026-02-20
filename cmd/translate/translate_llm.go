@@ -31,9 +31,30 @@ func NewTranslator() (*Translator, error) {
 	}, nil
 }
 
-// TranslateText translates text to the target language using GPT-4-turbo.
-func (t *Translator) TranslateText(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
-	systemPrompt := fmt.Sprintf(`You are a professional translator. Translate the following text from %s to %s.
+// buildSystemPrompt returns the appropriate system prompt for the given language pair.
+func buildSystemPrompt(sourceLang, targetLang string) string {
+	if targetLang == "arrr" {
+		return `Ye be a foul-mouthed, barnacle-covered sea dog of a translator. Rewrite the followin' English text into the most extreme, over-the-top pirate speak imaginable — like a mad captain three sheets to the wind on the high seas.
+
+IMPORTANT RULES:
+1. Preserve ALL markdown formatting exactly (links, images, headers, bold, italic, lists, tables, etc.)
+2. Keep proper nouns unchanged
+3. Go EXTREME with pirate speak — every sentence must drip with nautical swagger:
+   - Replace "you/your" with "ye/yer" throughout
+   - Replace "my/I/me" with "me" throughout
+   - Replace "is/are/was" with "be" throughout
+   - Replace "the" with "th'" frequently
+   - Pepper every few sentences with outbursts like "ARRR!", "BLIMEY!", "SHIVER ME TIMBERS!", "AVAST!", "BY DAVY JONES' LOCKER!"
+   - Replace mundane words with nautical equivalents: house→vessel, car→horseless carriage, road→landlubber's trail, toilet→the poop deck, eat→feast, walk→trek, go→sail, room→quarters, bed→hammock, city→port, travel→voyage, money→doubloons, problem→curse, etc.
+   - Add dramatic pirate interjections mid-paragraph
+   - End sentences with "says I!", "I tells ye!", "or I'll feed ye to the sharks!", "on me honour as a pirate!" occasionally
+4. Do NOT add any explanations, notes, or comments
+5. Return ONLY the rewritten text, nothing else
+6. Keep all HTML tags and shortcodes unchanged (e.g., {{< video src="..." >}})
+7. Do not translate file paths or URLs`
+	}
+
+	return fmt.Sprintf(`You are a professional translator. Translate the following text from %s to %s.
 
 IMPORTANT RULES:
 1. Preserve ALL markdown formatting exactly (links, images, headers, bold, italic, lists, tables, etc.)
@@ -43,6 +64,21 @@ IMPORTANT RULES:
 5. Return ONLY the translated text, nothing else
 6. Keep all HTML tags and shortcodes unchanged (e.g., {{< video src="..." >}})
 7. Do not translate file paths or URLs`, sourceLang, targetLang)
+}
+
+// temperatureFor returns the model temperature for a given target language.
+// Pirate speak uses a higher temperature for more creative, unpredictable output.
+// Real language translations use a low temperature for accuracy and consistency.
+func temperatureFor(targetLang string) float64 {
+	if targetLang == "arrr" {
+		return 0.9
+	}
+	return 0.3
+}
+
+// TranslateText translates text to the target language using GPT-4-turbo.
+func (t *Translator) TranslateText(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
+	systemPrompt := buildSystemPrompt(sourceLang, targetLang)
 
 	// Create chat completion with retry logic
 	var translation string
@@ -56,7 +92,7 @@ IMPORTANT RULES:
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(text),
 			},
-			Temperature: openai.Float(0.3), // Lower temperature for more deterministic translations
+			Temperature: openai.Float(temperatureFor(targetLang)),
 		})
 
 		if apiErr != nil {
@@ -85,8 +121,8 @@ IMPORTANT RULES:
 func (t *Translator) TranslateFrontmatter(ctx context.Context, fm *Frontmatter, sourceLang, targetLang string) (*Frontmatter, error) {
 	translated := *fm // Copy the frontmatter
 
-	// Translate title
-	if fm.Title != "" {
+	// Translate title — pirate speak keeps the original English title to avoid comically long results
+	if fm.Title != "" && targetLang != "arrr" {
 		translatedTitle, err := t.TranslateText(ctx, fm.Title, sourceLang, targetLang)
 		if err != nil {
 			return nil, fmt.Errorf("translating title: %w", err)
@@ -171,11 +207,12 @@ func (t *Translator) TranslateMarkdownFile(ctx context.Context, mf *MarkdownFile
 // getTranslationDisclaimer returns a translated disclaimer with link to original.
 func getTranslationDisclaimer(targetLang, sourceLang string) string {
 	disclaimers := map[string]string{
-		"en": "---\n\n*This blog post has been automatically translated by a Large Language Model.",
-		"de": "---\n\n*Dieser Blogbeitrag wurde automatisch von einem Large Language Model übersetzt.",
-		"es": "---\n\n*Esta publicación de blog ha sido traducida automáticamente por un Large Language Model.",
-		"fr": "---\n\n*Cet article de blog a été traduit automatiquement par un Large Language Model.",
-		"it": "---\n\n*Questo post del blog è stato tradotto automaticamente da un Large Language Model.",
+		"en":   "---\n\n*This blog post has been automatically translated by a Large Language Model.",
+		"de":   "---\n\n*Dieser Blogbeitrag wurde automatisch von einem Large Language Model übersetzt.",
+		"es":   "---\n\n*Esta publicación de blog ha sido traducida automáticamente por un Large Language Model.",
+		"fr":   "---\n\n*Cet article de blog a été traduit automatiquement par un Large Language Model.",
+		"it":   "---\n\n*Questo post del blog è stato tradotto automaticamente da un Large Language Model.",
+		"arrr": "---\n\n*Arrr, this here blog post be rewritten in the tongue o' pirates by a Large Language Model, ye scallywag!*",
 	}
 
 	if disclaimer, ok := disclaimers[targetLang]; ok {

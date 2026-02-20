@@ -1,5 +1,5 @@
 # logseq-to-hugo-converter
-Takes a logseq md file and converts special annotated lists to a blog post ready to be served with HUGO. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian).
+Takes a logseq md file and converts special annotated lists to a blog post ready to be served with HUGO. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian, and Pirate Speak).
 
 We use logseq for our log book and wanted to also be able to create blog post right out of the log book. See https://sailingnomads.ch for the blog.
 
@@ -184,7 +184,7 @@ When using the file watcher with a git repository configured, the script automat
 
 2. **File naming convention**: Only files matching the pattern `index.<lang>.md` are translated (e.g., `index.de.md`, `index.en.md`)
 
-3. **Supported languages**: English (en), German (de), Spanish (es), French (fr), Italian (it)
+3. **Supported languages**: English (`en`), German (`de`), Spanish (`es`), French (`fr`), Italian (`it`), Pirate Speak (`arrr`)
 
 **How it works:**
 - After converting files, the script runs `git status` to detect new or modified `.md` files
@@ -195,15 +195,22 @@ When using the file watcher with a git repository configured, the script automat
 **Manual translation:**
 You can also translate individual files manually:
 ```bash
-go run ./cmd/translate/translate.go <input_file.md>
+go run ./cmd/translate <input_file.md> [--target <lang1,lang2,...>]
 ```
 
-**Example:**
+**Examples:**
 ```bash
-go run ./cmd/translate/translate.go 2025-09-13_SKS/index.de.md
+# Translate to all supported languages
+go run ./cmd/translate 2025-09-13_SKS/index.de.md
+
+# Translate to a single specific language
+go run ./cmd/translate 2025-09-13_SKS/index.en.md --target arrr
+
+# Translate to multiple specific languages
+go run ./cmd/translate 2025-09-13_SKS/index.en.md --target es,fr,arrr
 ```
 
-This will create `index.en.md`, `index.es.md`, `index.fr.md`, and `index.it.md` in the same directory.
+The `--target` flag accepts a comma-separated list of language codes and limits translation to only those languages. Without it, all supported languages are generated (except the source language). This is useful for adding a new language to posts that already have other translations.
 
 For more details, see [TRANSLATION_TOOL.md](TRANSLATION_TOOL.md).
 
