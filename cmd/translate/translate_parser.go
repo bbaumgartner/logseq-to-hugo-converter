@@ -147,7 +147,9 @@ func escapeTomlString(s string) string {
 	return s
 }
 
-// GetTargetLanguages returns all supported languages except the source language.
+// GetTargetLanguages returns all standard languages except the source language.
+// Pirate Speak ("arrr") is intentionally excluded — it is only used when
+// explicitly requested via the --target flag.
 func GetTargetLanguages(sourceLang string) []Language {
 	allLanguages := []Language{
 		{Code: "en", Name: "English"},
@@ -155,7 +157,6 @@ func GetTargetLanguages(sourceLang string) []Language {
 		{Code: "es", Name: "Spanish"},
 		{Code: "fr", Name: "French"},
 		{Code: "it", Name: "Italian"},
-		{Code: "arrr", Name: "Pirate Speak"},
 	}
 
 	var targets []Language

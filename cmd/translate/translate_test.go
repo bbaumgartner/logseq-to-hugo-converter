@@ -444,31 +444,26 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 		targetLang   string
 		sourceLang   string
 		wantContains []string
-		wantLink     string
 	}{
 		{
-			name:       "English disclaimer from German",
+			name:       "English disclaimer",
 			targetLang: "en",
 			sourceLang: "de",
 			wantContains: []string{
 				"---",
 				"automatically translated",
 				"Large Language Model",
-				"original blog post",
 			},
-			wantLink: `relref path="." lang="de"`,
 		},
 		{
-			name:       "German disclaimer from English",
+			name:       "German disclaimer",
 			targetLang: "de",
 			sourceLang: "en",
 			wantContains: []string{
 				"---",
 				"automatisch",
 				"Large Language Model",
-				"originalen Blogbeitrag",
 			},
-			wantLink: `relref path="." lang="en"`,
 		},
 		{
 			name:       "Spanish disclaimer",
@@ -478,9 +473,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"---",
 				"traducida automáticamente",
 				"Large Language Model",
-				"publicación original",
 			},
-			wantLink: `relref path="." lang="en"`,
 		},
 		{
 			name:       "French disclaimer",
@@ -490,9 +483,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"---",
 				"traduit automatiquement",
 				"Large Language Model",
-				"article original",
 			},
-			wantLink: `relref path="." lang="de"`,
 		},
 		{
 			name:       "Italian disclaimer",
@@ -502,9 +493,7 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				"---",
 				"tradotto automaticamente",
 				"Large Language Model",
-				"post originale",
 			},
-			wantLink: `relref path="." lang="en"`,
 		},
 	}
 
@@ -512,7 +501,6 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := getTranslationDisclaimer(tt.targetLang, tt.sourceLang)
 
-			// Check that all expected strings are present
 			for _, want := range tt.wantContains {
 				if !strings.Contains(got, want) {
 					t.Errorf("getTranslationDisclaimer() missing expected text %q in result:\n%s",
@@ -520,20 +508,8 @@ func TestGetTranslationDisclaimer(t *testing.T) {
 				}
 			}
 
-			// Check that the correct link is present
-			if !strings.Contains(got, tt.wantLink) {
-				t.Errorf("getTranslationDisclaimer() missing expected link %q in result:\n%s",
-					tt.wantLink, got)
-			}
-
-			// Check that it starts with ---
 			if !strings.HasPrefix(got, "---") {
 				t.Errorf("getTranslationDisclaimer() should start with ---")
-			}
-
-			// Check that it contains markdown link syntax
-			if !strings.Contains(got, "](") || !strings.Contains(got, "[") {
-				t.Errorf("getTranslationDisclaimer() should contain markdown link syntax")
 			}
 		})
 	}

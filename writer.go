@@ -113,7 +113,7 @@ func (w *HugoWriter) Write(meta BlogMeta, content string) (string, error) {
 			"title = \"%s\"\n"+ // Post title (escaped)
 			"summary = \"%s\"\n"+ // Post summary/excerpt (escaped)
 			"[params]\n"+ // Custom parameters section
-			"  author =  \"%s\"\n"+ // Author name (indented under params)
+			"  author = \"%s\"\n"+ // Author name (indented under params)
 			"+++\n\n", // Closing delimiter + blank line
 		escapeTomlString(meta.Date),    // Escape date
 		escapeTomlString(meta.Date),    // Escape lastmod

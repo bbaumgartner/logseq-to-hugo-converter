@@ -1,7 +1,7 @@
 # logseq-to-hugo-converter
-Takes a logseq md file and converts special annotated lists to a blog post ready to be served with HUGO. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian, and Pirate Speak).
+Takes a Logseq markdown file and converts specially annotated lists to blog posts ready to be served with Hugo. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian, and Pirate Speak), and generates a static journey map image from GPS positions recorded in Logseq journals.
 
-We use logseq for our log book and wanted to also be able to create blog post right out of the log book. See https://sailingnomads.ch for the blog.
+We use Logseq for our log book and wanted to also be able to create blog posts right out of the log book, and visualise our sailing route on the homepage. See https://sailingnomads.ch for the blog.
 
 For example, having a logseq page or journal at /logseq-data with following form:
 
@@ -110,11 +110,11 @@ source ~/.zshrc
 To verify the installation and ensure everything is working correctly, run the test suite:
 
 ```bash
-# Run all tests
-go test
+# Run all tests (core converter + all sub-commands)
+go test ./...
 
 # Run tests with verbose output
-go test -v
+go test -v ./...
 ```
 
 
@@ -154,9 +154,12 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 **Workflow:**
 1. Watches for changes in Logseq directories
 2. Converts all markdown files to Hugo format
-3. **Automatically translates** any new or modified `index.<lang>.md` files using the translation tool
-4. Commits all changes (conversions + translations)
-5. Pushes to remote (unless `-try` flag is used)
+3. **Generates the journey map** — extracts `current-position::` entries from journals, writes `data/journey.json`, and renders `static/journey-map.png`
+4. **Automatically translates** any new or modified `index.<lang>.md` files using the translation tool
+5. Commits all changes (conversions + translations + map, when content also changed)
+6. Pushes to remote (unless `-try` flag is used)
+
+> **Note:** If the only files that changed are `data/journey.json` and `static/journey-map.png`, the commit is skipped. This avoids triggering a deployment (and its cost) just because your GPS position changed.
 
 ### Manual Conversion
 
@@ -213,6 +216,53 @@ go run ./cmd/translate 2025-09-13_SKS/index.en.md --target es,fr,arrr
 The `--target` flag accepts a comma-separated list of language codes and limits translation to only those languages. Without it, all supported languages are generated (except the source language). This is useful for adding a new language to posts that already have other translations.
 
 For more details, see [TRANSLATION_TOOL.md](TRANSLATION_TOOL.md).
+
+### Journey Map
+
+When a git repository is configured, the watcher automatically generates a static journey map from GPS positions recorded in your Logseq journals.
+
+#### How it works
+
+1. **Record your position** in any journal file using the `current-position::` property:
+   ```markdown
+   - current-position:: 45.5127,13.5954
+   ```
+   The position is assumed to be current from that journal date until the next `current-position::` entry appears.
+
+2. **`cmd/journeymap`** scans all journal files, extracts positions, filters out home-base entries (within ~1° of Ticino, Switzerland), merges nearby stops into a single cluster (within ~0.1°, roughly the size of a harbour), and writes `data/journey.json`.
+
+3. **`cmd/rendermap`** reads `journey.json` and renders `static/journey-map.png` using OpenStreetMap tiles via [go-staticmaps](https://github.com/flopp/go-staticmaps):
+   - Circles sized proportionally (√days) to duration of stay
+   - Color gradient from gray (oldest) to sailing blue (newest)
+   - A route polyline that faithfully follows the actual travel path, including revisits to the same location
+
+#### journey.json format
+
+```json
+{
+  "positions": [
+    { "date": "2026-03-14", "lat": 45.50543, "lng": 13.59597, "days": 5 }
+  ],
+  "route": [
+    { "lat": 45.50543, "lng": 13.59597 },
+    { "lat": 45.15039, "lng": 13.59877 },
+    { "lat": 45.50543, "lng": 13.59597 }
+  ]
+}
+```
+
+- `positions` — one entry per clustered stop; used to draw the circles
+- `route` — one entry per original journal entry in travel order, mapped to its cluster's representative coordinates; used to draw the polyline (revisited locations appear twice so the path is correct)
+
+#### Running the tools manually
+
+```bash
+# Step 1 – extract positions from journals
+go run ./cmd/journeymap /path/to/logseq/journals /path/to/hugo/data/journey.json
+
+# Step 2 – render the map
+go run ./cmd/rendermap /path/to/hugo/data/journey.json /path/to/hugo/static/journey-map.png
+```
 
 ### Requirements for Blog Posts
 
@@ -356,6 +406,9 @@ note right of Main
   3. Filters by status
   4. Processes each post
   5. Writes Hugo output
+  (cmd/journeymap and
+   cmd/rendermap are separate
+   pipeline steps)
 end note
 
 note right of Extractor
@@ -372,24 +425,33 @@ end note
 
 ```
 📁 logseq-to-hugo-converter/
-├── main.go              ⭐ Entry point & conversion logic (119 lines)
-├── types.go             📋 Data structures (22 lines)
-├── metadata.go          🏷️  Metadata parsing (105 lines)
-├── extractor.go         🔍 Blog extraction (204 lines)
-├── processors.go        🖼️  Image/video processing (215 lines)
-├── writer.go            📝 Hugo format writing (158 lines)
-├── main_test.go         ✅ Tests (364 lines)
-├── cmd/translate/       🌍 Translation tool
-│   ├── translate.go     📝 CLI entry point (127 lines)
-│   ├── translate_llm.go 🤖 OpenAI integration (190 lines)
-│   ├── translate_parser.go 📖 Markdown parsing (170 lines)
-│   └── translate_writer.go 💾 File writing (75 lines)
-├── test-nesting.md      📄 Deep nesting test
-├── test-multiple.md     📄 Multiple posts test
-└── watch-and-convert.sh 👀 File watcher + auto-translation (341 lines)
+├── main.go                    ⭐ Entry point & conversion logic
+├── types.go                   📋 Data structures
+├── metadata.go                🏷️  Metadata parsing
+├── extractor.go               🔍 Blog extraction
+├── processors.go              🖼️  Image/video processing
+├── writer.go                  📝 Hugo format writing
+├── main_test.go               ✅ Core converter tests
+├── cmd/
+│   ├── translate/             🌍 Translation tool
+│   │   ├── translate.go           CLI entry point
+│   │   ├── translate_llm.go       OpenAI integration
+│   │   ├── translate_parser.go    Markdown parsing
+│   │   ├── translate_writer.go    File writing
+│   │   └── translate_test.go      Tests
+│   ├── journeymap/            🗺️  Position extractor
+│   │   ├── journeymap.go          Extracts current-position:: entries,
+│   │   │                          filters home, clusters nearby stops,
+│   │   │                          writes journey.json
+│   │   └── journeymap_test.go     Tests
+│   └── rendermap/             🖼️  Map renderer
+│       ├── rendermap.go           Reads journey.json, renders PNG via
+│       │                          go-staticmaps + OpenStreetMap tiles
+│       └── rendermap_test.go      Tests
+├── test-nesting.md            📄 Deep nesting test fixture
+├── test-multiple.md           📄 Multiple posts test fixture
+└── watch-and-convert.sh       👀 File watcher + pipeline orchestrator
 ```
-
-**Total:** ~1,471 lines of code (excluding tests)
 
 ### Design Principles
 

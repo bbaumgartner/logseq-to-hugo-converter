@@ -130,25 +130,35 @@ git_commit_and_push() {
     
     cd "$GIT_REPO_DIR"
     
-    # Check if there are any changes
+    # Check if there are any changes at all
     if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
-        echo -e "${GREEN}Changes detected, committing...${NC}"
-        
-        # Add all changes
-        git add --all
-        
-        # Commit with message
-        git commit -m "automatic change by logseq-to-hugo-converter"
-        
-        # Push to remote (unless in try mode)
-        if [ "$TRY_MODE" = true ]; then
-            echo -e "${YELLOW}[TRY MODE] Skipping git push - changes are committed locally only${NC}"
+
+        # Check whether anything changed beyond the journey map files.
+        # Changes limited to journey-map.png / journey.json alone do not
+        # warrant a deployment, so we skip the commit in that case.
+        non_journey_changes=$(git status --porcelain | grep -v -E '(static/journey-map\.png|data/journey\.json)$')
+
+        if [ -z "$non_journey_changes" ]; then
+            echo -e "${YELLOW}Only journey map files changed — skipping commit to avoid unnecessary deployment${NC}"
         else
-            echo -e "${YELLOW}Pushing to remote...${NC}"
-            if git push; then
-                echo -e "${GREEN}Successfully pushed changes to remote${NC}"
+            echo -e "${GREEN}Changes detected, committing...${NC}"
+            
+            # Add all changes (journey map included when something else also changed)
+            git add --all
+            
+            # Commit with message
+            git commit -m "automatic change by logseq-to-hugo-converter"
+            
+            # Push to remote (unless in try mode)
+            if [ "$TRY_MODE" = true ]; then
+                echo -e "${YELLOW}[TRY MODE] Skipping git push - changes are committed locally only${NC}"
             else
-                echo -e "${RED}Failed to push changes${NC}"
+                echo -e "${YELLOW}Pushing to remote...${NC}"
+                if git push; then
+                    echo -e "${GREEN}Successfully pushed changes to remote${NC}"
+                else
+                    echo -e "${RED}Failed to push changes${NC}"
+                fi
             fi
         fi
     else
@@ -301,6 +311,25 @@ convert_all_files() {
     fi
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
+    # Generate journey map if git repo (Hugo site) is configured
+    if [ -n "$GIT_REPO_DIR" ]; then
+        echo ""
+        echo -e "${YELLOW}Generating journey map...${NC}"
+        JOURNEY_JSON="$GIT_REPO_DIR/data/journey.json"
+        JOURNEY_PNG="$GIT_REPO_DIR/static/journey-map.png"
+        if (cd "$SCRIPT_DIR" && go run ./cmd/journeymap "$INPUT_DIR/journals" "$JOURNEY_JSON") 2>&1; then
+            if [ -f "$JOURNEY_JSON" ]; then
+                if (cd "$SCRIPT_DIR" && go run ./cmd/rendermap "$JOURNEY_JSON" "$JOURNEY_PNG") 2>&1; then
+                    echo -e "${GREEN}Journey map written to $JOURNEY_PNG${NC}"
+                else
+                    echo -e "${RED}Failed to render journey map${NC}"
+                fi
+            fi
+        else
+            echo -e "${RED}Failed to extract journey positions${NC}"
+        fi
+    fi
+
     # Translate changed files before committing
     translate_changed_files
     
