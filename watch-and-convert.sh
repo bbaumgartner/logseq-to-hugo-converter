@@ -171,6 +171,9 @@ translate_changed_files() {
     cd "$GIT_REPO_DIR"
     
     # Get list of new or modified .md files using git status --porcelain
+    # --untracked-files=all ensures files inside brand-new directories are listed
+    # individually (without it, git collapses a new dir to "?? dir/" which doesn't
+    # match the \.md$ pattern and causes translation to be silently skipped).
     # Format: XY filename
     # A  = new file (staged)
     # M  = modified (staged)
@@ -179,7 +182,7 @@ translate_changed_files() {
     changed_files=()
     while IFS= read -r line; do
         changed_files+=("$line")
-    done < <(git status --porcelain | grep -E '^(A |M | M|MM|\?\?).*\.md$' | cut -c4-)
+    done < <(git status --porcelain --untracked-files=all | grep -E '^(A |M | M|MM|\?\?).*\.md$' | cut -c4-)
     
     if [ ${#changed_files[@]} -eq 0 ]; then
         echo -e "${YELLOW}No .md files to translate${NC}"
