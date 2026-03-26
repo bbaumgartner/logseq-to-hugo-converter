@@ -188,22 +188,57 @@ func TestPositionRouteIndex_NotFound_ReturnsLast(t *testing.T) {
 	}
 }
 
+// ---- holdFramesForDays ----
+
+func TestHoldFramesForDays_Endpoints(t *testing.T) {
+	if holdFramesForDays(1) != minHoldFrames {
+		t.Errorf("holdFramesForDays(1) = %d, want %d", holdFramesForDays(1), minHoldFrames)
+	}
+	if holdFramesForDays(30) != maxHoldFrames {
+		t.Errorf("holdFramesForDays(30) = %d, want %d", holdFramesForDays(30), maxHoldFrames)
+	}
+}
+
+func TestHoldFramesForDays_Clamped(t *testing.T) {
+	if holdFramesForDays(0) != minHoldFrames {
+		t.Errorf("holdFramesForDays(0) = %d, want %d (clamped)", holdFramesForDays(0), minHoldFrames)
+	}
+	if holdFramesForDays(1000) != maxHoldFrames {
+		t.Errorf("holdFramesForDays(1000) = %d, want %d (clamped)", holdFramesForDays(1000), maxHoldFrames)
+	}
+}
+
+func TestHoldFramesForDays_MonotonicallyNonDecreasing(t *testing.T) {
+	prev := holdFramesForDays(1)
+	for days := 2; days <= 30; days++ {
+		curr := holdFramesForDays(days)
+		if curr < prev {
+			t.Errorf("holdFramesForDays(%d)=%d < holdFramesForDays(%d)=%d", days, curr, days-1, prev)
+		}
+		prev = curr
+	}
+}
+
 // ---- totalFrames ----
 
 func TestTotalFrames(t *testing.T) {
-	cases := []struct {
-		n    int
-		want int
-	}{
-		{1, flyInFrames + holdFrames + finalHold},
-		{3, 3*(flyInFrames+holdFrames) + finalHold},
-		{0, finalHold},
+	single := []Position{{Days: 1}}
+	want := flyInFrames + holdFramesForDays(1) + finalHold
+	if got := totalFrames(single); got != want {
+		t.Errorf("totalFrames(1-day) = %d, want %d", got, want)
 	}
-	for _, tc := range cases {
-		got := totalFrames(tc.n)
-		if got != tc.want {
-			t.Errorf("totalFrames(%d) = %d, want %d", tc.n, got, tc.want)
-		}
+
+	empty := []Position{}
+	if got := totalFrames(empty); got != finalHold {
+		t.Errorf("totalFrames(empty) = %d, want %d", got, finalHold)
+	}
+
+	// Longer stays produce more total frames than shorter ones.
+	short := []Position{{Days: 1}, {Days: 1}}
+	long := []Position{{Days: 30}, {Days: 30}}
+	if totalFrames(short) >= totalFrames(long) {
+		t.Errorf("long stays should produce more frames: short=%d, long=%d",
+			totalFrames(short), totalFrames(long))
 	}
 }
 

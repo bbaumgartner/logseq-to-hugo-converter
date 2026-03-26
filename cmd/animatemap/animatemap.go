@@ -33,10 +33,11 @@ const (
 	imgWidth    = 900
 	imgHeight   = 500
 	fps         = 24
-	flyInFrames = 15   // frames for the fly-in shrink animation
-	flyInScale  = 4.0  // starting size multiplier relative to final size
-	holdFrames  = 10   // frames to hold after each fly-in
-	finalHold   = 60   // frames for the completed map at the end (~2.5 s)
+	flyInFrames   = 15  // frames for the fly-in shrink animation
+	flyInScale    = 4.0 // starting size multiplier relative to final size
+	minHoldFrames = 6   // hold frames for a 1-day stay  (~0.25 s)
+	maxHoldFrames = 48  // hold frames for a 30+ day stay (~2 s)
+	finalHold     = 60  // frames for the completed map at the end (~2.5 s)
 )
 
 var routeColor = color.RGBA{R: 100, G: 100, B: 100, A: 180}
@@ -107,15 +108,27 @@ func loadJourneyMap(path string) (JourneyMap, error) {
 // matching the sizing used by cmd/rendermap.
 func markerSize(days int) int {
 	const minSize, maxSize = 30, 100
+	return linearInterp(days, minSize, maxSize)
+}
+
+// holdFramesForDays linearly interpolates between minHoldFrames (1 day) and
+// maxHoldFrames (≥30 days) so that longer stays feel proportionally longer
+// in the animation.
+func holdFramesForDays(days int) int {
+	return linearInterp(days, minHoldFrames, maxHoldFrames)
+}
+
+// linearInterp maps days in [1, 30] to [minVal, maxVal], clamping outside that range.
+func linearInterp(days, minVal, maxVal int) int {
 	const minDays, maxDays = 1, 30
 	if days <= minDays {
-		return minSize
+		return minVal
 	}
 	if days >= maxDays {
-		return maxSize
+		return maxVal
 	}
 	t := float64(days-minDays) / float64(maxDays-minDays)
-	return int(math.Round(float64(minSize) + t*float64(maxSize-minSize)))
+	return int(math.Round(float64(minVal) + t*float64(maxVal-minVal)))
 }
 
 // mercatorY converts latitude (degrees) to a Web Mercator y coordinate in [0,1].
@@ -252,8 +265,12 @@ func positionRouteIndex(pos Position, route []LatLng) int {
 
 // totalFrames returns the total number of frames the animation will produce.
 // Useful for progress reporting and testing.
-func totalFrames(numPositions int) int {
-	return numPositions*(flyInFrames+holdFrames) + finalHold
+func totalFrames(positions []Position) int {
+	total := finalHold
+	for _, p := range positions {
+		total += flyInFrames + holdFramesForDays(p.Days)
+	}
+	return total
 }
 
 // markerState groups precomputed pixel position, final size, and
@@ -303,7 +320,7 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	total := totalFrames(len(journey.Positions))
+	total := totalFrames(journey.Positions)
 	frameIdx := 0
 
 	writeFrame := func(img *image.RGBA) error {
@@ -343,7 +360,7 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 		}
 
 		// Hold: all positions up to and including eventIdx at final size.
-		for f := 0; f < holdFrames; f++ {
+		for f := 0; f < holdFramesForDays(journey.Positions[eventIdx].Days); f++ {
 			frame := cloneImage(baseMap)
 			drawRoute(frame, journey.Route, routeShown, zoom, centerLat, centerLng)
 			for j := 0; j <= eventIdx; j++ {
