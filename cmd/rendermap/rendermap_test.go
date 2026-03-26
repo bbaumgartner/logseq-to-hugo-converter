@@ -2,129 +2,127 @@ package main
 
 import (
 	"encoding/json"
-	"image/color"
-	"math"
+	"image"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-// ---- lerpColor ----
+// ---- markerSize ----
 
-func TestLerpColor_Endpoints(t *testing.T) {
-	oldest := lerpColor(0.0)
-	if oldest.R != 150 || oldest.G != 150 || oldest.B != 150 {
-		t.Errorf("lerpColor(0) = %v, want R=150 G=150 B=150 (gray)", oldest)
+func TestMarkerSize_Endpoints(t *testing.T) {
+	if markerSize(1) != 30 {
+		t.Errorf("markerSize(1) = %d, want 30 (minimum)", markerSize(1))
 	}
-
-	newest := lerpColor(1.0)
-	if newest.R != 0 || newest.G != 119 || newest.B != 204 {
-		t.Errorf("lerpColor(1) = %v, want R=0 G=119 B=204 (sailing blue)", newest)
+	if markerSize(30) != 100 {
+		t.Errorf("markerSize(30) = %d, want 100 (maximum)", markerSize(30))
 	}
 }
 
-func TestLerpColor_Midpoint(t *testing.T) {
-	mid := lerpColor(0.5)
-	wantR := uint8(math.Round(150 * 0.5))
-	wantG := uint8(math.Round(150*0.5 + 119*0.5))
-	wantB := uint8(math.Round(150*0.5 + 204*0.5))
-	if mid.R != wantR || mid.G != wantG || mid.B != wantB {
-		t.Errorf("lerpColor(0.5) = %v, want R=%d G=%d B=%d", mid, wantR, wantG, wantB)
+func TestMarkerSize_Clamped(t *testing.T) {
+	if markerSize(0) != 30 {
+		t.Errorf("markerSize(0) = %d, want 30 (clamped to minimum)", markerSize(0))
+	}
+	if markerSize(1000) != 100 {
+		t.Errorf("markerSize(1000) = %d, want 100 (clamped to maximum)", markerSize(1000))
 	}
 }
 
-func TestLerpColor_AlphaConstant(t *testing.T) {
-	for _, t2 := range []float64{0, 0.25, 0.5, 0.75, 1.0} {
-		c := lerpColor(t2)
-		if c.A != 200 {
-			t.Errorf("lerpColor(%v).A = %d, want 200", t2, c.A)
-		}
+func TestMarkerSize_Midpoint(t *testing.T) {
+	// t = (15-1)/(30-1) = 14/29 ≈ 0.483, so size = 30 + 0.483*70 ≈ 64 (rounded).
+	got := markerSize(15)
+	if got < 60 || got > 68 {
+		t.Errorf("markerSize(15) = %d, want ~64 (midpoint)", got)
 	}
 }
 
-func TestLerpColor_MonotonicallyIncreasingBlue(t *testing.T) {
-	// Blue channel should increase as t increases (older=gray has less blue).
-	steps := []float64{0, 0.25, 0.5, 0.75, 1.0}
-	prev := lerpColor(steps[0])
-	for _, t2 := range steps[1:] {
-		curr := lerpColor(t2)
-		if curr.B < prev.B {
-			t.Errorf("Blue channel decreased from t=%.2f (B=%d) to t=%.2f (B=%d)",
-				t2-0.25, prev.B, t2, curr.B)
+func TestMarkerSize_MonotonicallyIncreasing(t *testing.T) {
+	prev := markerSize(1)
+	for days := 2; days <= 30; days++ {
+		curr := markerSize(days)
+		if curr < prev {
+			t.Errorf("markerSize not non-decreasing: markerSize(%d)=%d < markerSize(%d)=%d", days, curr, days-1, prev)
 		}
 		prev = curr
 	}
 }
 
-// ---- strokeColor ----
+// ---- loadLogos ----
 
-func TestStrokeColor_DarkerThanFill(t *testing.T) {
-	fill := color.RGBA{R: 100, G: 80, B: 60, A: 200}
-	stroke := strokeColor(fill)
-
-	if stroke.R != 50 {
-		t.Errorf("strokeColor R = %d, want %d", stroke.R, 50)
+func TestLoadLogos_Succeeds(t *testing.T) {
+	logos, err := loadLogos()
+	if err != nil {
+		t.Fatalf("loadLogos() error: %v", err)
 	}
-	if stroke.G != 40 {
-		t.Errorf("strokeColor G = %d, want %d", stroke.G, 40)
+	if len(logos) != 8 {
+		t.Errorf("loadLogos() returned %d entries, want 8", len(logos))
 	}
-	if stroke.B != 30 {
-		t.Errorf("strokeColor B = %d, want %d", stroke.B, 30)
-	}
-	if stroke.A != 255 {
-		t.Errorf("strokeColor A = %d, want 255 (fully opaque)", stroke.A)
-	}
-}
-
-func TestStrokeColor_BlackFillStaysBlack(t *testing.T) {
-	stroke := strokeColor(color.RGBA{R: 0, G: 0, B: 0, A: 255})
-	if stroke.R != 0 || stroke.G != 0 || stroke.B != 0 {
-		t.Errorf("stroke of black fill should be black, got %v", stroke)
-	}
-}
-
-// ---- circleRadiusMeters ----
-
-func TestCircleRadiusMeters_ScalesWithDays(t *testing.T) {
-	r1 := circleRadiusMeters(1)
-	r7 := circleRadiusMeters(7)
-	r30 := circleRadiusMeters(30)
-
-	if r1 >= r7 {
-		t.Errorf("expected r(1) < r(7), got r(1)=%.0f r(7)=%.0f", r1, r7)
-	}
-	if r7 >= r30 {
-		t.Errorf("expected r(7) < r(30), got r(7)=%.0f r(30)=%.0f", r7, r30)
-	}
-}
-
-func TestCircleRadiusMeters_MinimumIsPositive(t *testing.T) {
-	r := circleRadiusMeters(1)
-	if r <= 0 {
-		t.Errorf("circleRadiusMeters(1) = %.0f, want > 0", r)
-	}
-}
-
-func TestCircleRadiusMeters_CappedAtMaximum(t *testing.T) {
-	// Very long stay should not produce a radius larger than 80 000 m.
-	r := circleRadiusMeters(100000)
-	if r > 80000 {
-		t.Errorf("circleRadiusMeters(100000) = %.0f, exceeds cap of 80000", r)
-	}
-}
-
-func TestCircleRadiusMeters_SqrtScaling(t *testing.T) {
-	// radius should follow 7000 * sqrt(days) up to the cap.
-	for _, days := range []int{1, 4, 9, 16} {
-		got := circleRadiusMeters(days)
-		want := 7000 * math.Sqrt(float64(days))
-		if math.Abs(got-want) > 1 {
-			t.Errorf("circleRadiusMeters(%d) = %.2f, want %.2f", days, got, want)
+	for _, l := range logos {
+		b := l.img.Bounds()
+		if b.Dx() == 0 || b.Dy() == 0 {
+			t.Errorf("logo_%dpx has zero-size bounds", l.size)
 		}
 	}
 }
 
-// ---- loadPositions ----
+func TestLoadLogos_SizesMatch(t *testing.T) {
+	logos, err := loadLogos()
+	if err != nil {
+		t.Fatalf("loadLogos() error: %v", err)
+	}
+	want := []int{30, 40, 50, 60, 70, 80, 90, 100}
+	for i, l := range logos {
+		if l.size != want[i] {
+			t.Errorf("logos[%d].size = %d, want %d", i, l.size, want[i])
+		}
+	}
+}
+
+// ---- nearestLogo ----
+
+func makeLogoEntries(sizes []int) []logoEntry {
+	entries := make([]logoEntry, len(sizes))
+	for i, s := range sizes {
+		entries[i] = logoEntry{size: s, img: image.NewRGBA(image.Rect(0, 0, s, s))}
+	}
+	return entries
+}
+
+func TestNearestLogo_ExactMatch(t *testing.T) {
+	logos := makeLogoEntries([]int{30, 40, 50, 60, 70, 80, 90, 100})
+	for _, want := range []int{30, 40, 50, 60, 70, 80, 90, 100} {
+		got := nearestLogo(logos, want)
+		b := got.Bounds()
+		if b.Dx() != want {
+			t.Errorf("nearestLogo(logos, %d).Bounds().Dx() = %d, want %d", want, b.Dx(), want)
+		}
+	}
+}
+
+func TestNearestLogo_RoundsToNearest(t *testing.T) {
+	logos := makeLogoEntries([]int{30, 40, 50, 60, 70, 80, 90, 100})
+	cases := []struct {
+		size int
+		want int
+	}{
+		{10, 30},  // below 30 → 30
+		{34, 30},  // closer to 30 than 40
+		{35, 30},  // exactly midpoint (picks first on tie)
+		{36, 40},  // closer to 40 than 30
+		{55, 50},  // closer to 50 than 60
+		{56, 60},  // closer to 60 than 50
+		{110, 100}, // above 100 → 100
+	}
+	for _, tc := range cases {
+		got := nearestLogo(logos, tc.size)
+		b := got.Bounds()
+		if b.Dx() != tc.want {
+			t.Errorf("nearestLogo(logos, %d).Bounds().Dx() = %d, want %d", tc.size, b.Dx(), tc.want)
+		}
+	}
+}
+
+// ---- loadJourneyMap ----
 
 func makeJourneyJSON(t *testing.T, journey JourneyMap) []byte {
 	t.Helper()
@@ -201,8 +199,8 @@ func TestLoadJourneyMap_InvalidJSON(t *testing.T) {
 
 // ---- renderMap integration ----
 
-// TestRenderMap_ProducesFile verifies that renderMap creates a valid PNG file.
-// This test downloads OSM tiles and requires network access.
+// These tests download OSM tiles and require network access.
+
 func TestRenderMap_ProducesFile(t *testing.T) {
 	dir := t.TempDir()
 	outputPath := filepath.Join(dir, "journey-map.png")
@@ -232,19 +230,18 @@ func TestRenderMap_ProducesFile(t *testing.T) {
 }
 
 func TestRenderMap_RouteRevisit(t *testing.T) {
-	// Verify that a leave-and-return journey (route longer than positions) renders without error.
 	dir := t.TempDir()
 	outputPath := filepath.Join(dir, "journey-map.png")
 
 	journey := JourneyMap{
 		Positions: []Position{
-			{Date: "2026-03-14", Lat: 45.50543, Lng: 13.59597, Days: 5}, // Portoroz (merged)
-			{Date: "2026-03-18", Lat: 45.15039, Lng: 13.59877, Days: 1}, // Medulin
+			{Date: "2026-03-14", Lat: 45.50543, Lng: 13.59597, Days: 5},
+			{Date: "2026-03-18", Lat: 45.15039, Lng: 13.59877, Days: 1},
 		},
 		Route: []LatLng{
-			{Lat: 45.50543, Lng: 13.59597}, // Portoroz (first visit)
-			{Lat: 45.15039, Lng: 13.59877}, // Medulin
-			{Lat: 45.50543, Lng: 13.59597}, // Portoroz (return)
+			{Lat: 45.50543, Lng: 13.59597},
+			{Lat: 45.15039, Lng: 13.59877},
+			{Lat: 45.50543, Lng: 13.59597},
 		},
 	}
 

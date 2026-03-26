@@ -1,11 +1,18 @@
 // Package main reads a journey.json file and renders a static PNG map image
-// using OpenStreetMap tiles with circles sized by duration and colored by age.
+// using OpenStreetMap tiles with the Sailing Nomads logo sized by duration of stay.
+// Logo markers are drawn at one of eight pre-prepared sizes (30–100px in 10px steps);
+// markerSize linearly interpolates between 30px (1 day) and 100px (≥30 days),
+// then nearestLogo selects the closest pre-prepared image without runtime scaling.
 package main
 
 import (
+	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/color"
+	_ "image/png"
 	"math"
 	"os"
 	"path/filepath"
@@ -14,6 +21,38 @@ import (
 	"github.com/fogleman/gg"
 	"github.com/golang/geo/s2"
 )
+
+//go:embed logo_30px.png
+var logo30 []byte
+
+//go:embed logo_40px.png
+var logo40 []byte
+
+//go:embed logo_50px.png
+var logo50 []byte
+
+//go:embed logo_60px.png
+var logo60 []byte
+
+//go:embed logo_70px.png
+var logo70 []byte
+
+//go:embed logo_80px.png
+var logo80 []byte
+
+//go:embed logo_90px.png
+var logo90 []byte
+
+//go:embed logo_100px.png
+var logo100 []byte
+
+var routeColor = color.RGBA{R: 100, G: 100, B: 100, A: 180}
+
+// logoEntry pairs a pre-prepared logo image with its pixel size.
+type logoEntry struct {
+	size int
+	img  image.Image
+}
 
 // Position mirrors the clustered stop structure written by cmd/journeymap.
 type Position struct {
@@ -41,10 +80,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	jsonPath := os.Args[1]
-	outputPath := os.Args[2]
-
-	journey, err := loadJourneyMap(jsonPath)
+	journey, err := loadJourneyMap(os.Args[1])
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading journey map: %v\n", err)
 		os.Exit(1)
@@ -55,12 +91,12 @@ func main() {
 		return
 	}
 
-	if err := renderMap(journey, outputPath); err != nil {
+	if err := renderMap(journey, os.Args[2]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error rendering map: %v\n", err)
 		os.Exit(1)
 	}
 
-	fmt.Printf("Journey map rendered to %s\n", outputPath)
+	fmt.Printf("Journey map rendered to %s\n", os.Args[2])
 }
 
 func loadJourneyMap(path string) (JourneyMap, error) {
@@ -75,39 +111,77 @@ func loadJourneyMap(path string) (JourneyMap, error) {
 	return journey, nil
 }
 
-// lerpColor interpolates from gray (t=0, oldest) to sailing blue (t=1, newest).
-func lerpColor(t float64) color.RGBA {
-	r := uint8(math.Round(150 * (1 - t)))
-	g := uint8(math.Round(150*(1-t) + 119*t))
-	b := uint8(math.Round(150*(1-t) + 204*t))
-	return color.RGBA{R: r, G: g, B: b, A: 200}
-}
-
-// strokeColor returns a darker, fully opaque version of a fill color for the circle border.
-func strokeColor(fill color.RGBA) color.RGBA {
-	return color.RGBA{
-		R: fill.R / 2,
-		G: fill.G / 2,
-		B: fill.B / 2,
-		A: 255,
+// loadLogos decodes all embedded logo PNGs and returns them sorted by size.
+func loadLogos() ([]logoEntry, error) {
+	candidates := []struct {
+		size int
+		data []byte
+	}{
+		{30, logo30},
+		{40, logo40},
+		{50, logo50},
+		{60, logo60},
+		{70, logo70},
+		{80, logo80},
+		{90, logo90},
+		{100, logo100},
 	}
+	logos := make([]logoEntry, 0, len(candidates))
+	for _, c := range candidates {
+		img, _, err := image.Decode(bytes.NewReader(c.data))
+		if err != nil {
+			return nil, fmt.Errorf("decoding logo_%dpx.png: %w", c.size, err)
+		}
+		logos = append(logos, logoEntry{size: c.size, img: img})
+	}
+	return logos, nil
 }
 
-// circleRadiusMeters returns a geographic radius scaled by duration.
-// Uses sqrt scaling so short stays are still distinguishable.
-func circleRadiusMeters(days int) float64 {
-	return math.Min(7000*math.Sqrt(float64(days)), 80000)
+// nearestLogo returns the logo whose size is closest to the requested pixel size.
+func nearestLogo(logos []logoEntry, size int) image.Image {
+	best := logos[0]
+	for _, l := range logos[1:] {
+		if abs(l.size-size) < abs(best.size-size) {
+			best = l
+		}
+	}
+	return best.img
+}
+
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// markerSize returns the ideal pixel size for a logo marker scaled by duration.
+// Linearly interpolates between 20px (1 day) and 100px (30+ days).
+// The result is then quantized to the nearest pre-prepared logo size by nearestLogo.
+func markerSize(days int) int {
+	const minSize, maxSize = 30, 100
+	const minDays, maxDays = 1, 30
+	if days <= minDays {
+		return minSize
+	}
+	if days >= maxDays {
+		return maxSize
+	}
+	t := float64(days-minDays) / float64(maxDays-minDays)
+	return int(math.Round(float64(minSize) + t*float64(maxSize-minSize)))
 }
 
 func renderMap(journey JourneyMap, outputPath string) error {
+	logos, err := loadLogos()
+	if err != nil {
+		return fmt.Errorf("loading logos: %w", err)
+	}
+
 	ctx := sm.NewContext()
 	ctx.SetSize(900, 500)
 	ctx.OverrideAttribution("")
 
-	positions := journey.Positions
-	n := len(positions)
-
-	// Route polyline — drawn first so circles render on top.
+	// Route polyline — drawn first so markers render on top.
 	// Uses journey.Route which preserves the actual travel order including
 	// revisits to the same cluster (e.g. Portorož → Medulin → Portorož).
 	if len(journey.Route) > 1 {
@@ -115,22 +189,16 @@ func renderMap(journey JourneyMap, outputPath string) error {
 		for i, p := range journey.Route {
 			latLngs[i] = s2.LatLngFromDegrees(p.Lat, p.Lng)
 		}
-		ctx.AddObject(sm.NewPath(latLngs, color.RGBA{R: 100, G: 100, B: 100, A: 180}, 2.0))
+		ctx.AddObject(sm.NewPath(latLngs, routeColor, 2.0))
 	}
 
-	// Circles — oldest first so newest renders on top.
-	for i, p := range positions {
-		t := 0.0
-		if n > 1 {
-			t = float64(i) / float64(n-1)
-		} else {
-			t = 1.0
-		}
-		fill := lerpColor(t)
-		border := strokeColor(fill)
-		radius := circleRadiusMeters(p.Days)
+	// Logo markers — oldest first so newest renders on top.
+	for _, p := range journey.Positions {
+		size := markerSize(p.Days)
+		logo := nearestLogo(logos, size)
+		offset := float64(size) / 2
 		pos := s2.LatLngFromDegrees(p.Lat, p.Lng)
-		ctx.AddObject(sm.NewCircle(pos, border, fill, radius, 2.0))
+		ctx.AddObject(sm.NewImageMarker(pos, logo, offset, offset))
 	}
 
 	img, err := ctx.Render()
