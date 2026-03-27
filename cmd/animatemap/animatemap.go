@@ -30,14 +30,16 @@ var logoBytes []byte
 
 // Animation timing (all in frames at fps).
 const (
-	imgWidth    = 900
-	imgHeight   = 500
-	fps         = 24
-	flyInFrames   = 15  // frames for the fly-in shrink animation
-	flyInScale    = 4.0 // starting size multiplier relative to final size
-	minHoldFrames = 6   // hold frames for a 1-day stay  (~0.25 s)
-	maxHoldFrames = 48  // hold frames for a 30+ day stay (~2 s)
-	finalHold     = 60  // frames for the completed map at the end (~2.5 s)
+	imgWidth      = 900
+	imgHeight     = 500
+	fps           = 24
+	flyInFrames   = 15   // frames for the fly-in shrink animation (smooth ease-out)
+	flyInScale    = 4.0  // starting size multiplier relative to final size
+	bounceFrames  = 12   // frames for 3 post-landing bounces (~0.5 s)
+	bounceAmp     = 0.25 // amplitude of each bounce (0.25 = 25% undershoot/overshoot)
+	minHoldFrames = 6    // hold frames for a 1-day stay  (~0.25 s)
+	maxHoldFrames = 48   // hold frames for a 30+ day stay (~2 s)
+	finalHold     = 60   // frames for the completed map at the end (~2.5 s)
 )
 
 var routeColor = color.RGBA{R: 100, G: 100, B: 100, A: 180}
@@ -116,6 +118,25 @@ func markerSize(days int) int {
 // in the animation.
 func holdFramesForDays(days int) int {
 	return linearInterp(days, minHoldFrames, maxHoldFrames)
+}
+
+// bounceMultiplier returns a size multiplier for bounce frame f out of total
+// bounceFrames, producing nBounces oscillations that decay to 1 by the end.
+// At f=0 the multiplier is 1 (seamlessly joins the end of the fly-in).
+// At f=bounceFrames the multiplier is also 1 (fully settled).
+// Between those points the logo squishes below and springs above its final
+// size nBounces times, with linearly decreasing amplitude.
+//
+//	size(f) = finalSize × bounceMultiplier(f, ...)
+func bounceMultiplier(f, total, nBounces int, amplitude float64) float64 {
+	if total <= 0 {
+		return 1
+	}
+	t := float64(f) / float64(total)
+	// nBounces half-cycles of sine give nBounces visible squish/spring events.
+	// (1-t) damps amplitude linearly to zero so the logo settles cleanly.
+	dampedSine := math.Sin(float64(nBounces)*math.Pi*t) * (1 - t)
+	return 1 - amplitude*dampedSine
 }
 
 // linearInterp maps days in [1, 30] to [minVal, maxVal], clamping outside that range.
@@ -268,7 +289,7 @@ func positionRouteIndex(pos Position, route []LatLng) int {
 func totalFrames(positions []Position) int {
 	total := finalHold
 	for _, p := range positions {
-		total += flyInFrames + holdFramesForDays(p.Days)
+		total += flyInFrames + bounceFrames + holdFramesForDays(p.Days)
 	}
 	return total
 }
@@ -339,11 +360,32 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 		st := states[eventIdx]
 
 		// Fly-in: logo shrinks from flyInScale × finalSize to finalSize.
+		// Ease-IN (t²): logo accelerates as it falls, arriving with velocity
+		// rather than decelerating to a stop, so it flows directly into the bounce.
 		for f := 0; f < flyInFrames; f++ {
 			t := float64(f) / float64(flyInFrames-1) // 0→1
-			easedT := 1 - (1-t)*(1-t)               // ease-out quadratic
+			easedT := t * t                          // ease-in quadratic: starts slow, ends fast
 			scale := flyInScale - easedT*(flyInScale-1)
 			size := int(math.Round(float64(st.finalSize) * scale))
+			if size < 1 {
+				size = 1
+			}
+
+			frame := cloneImage(baseMap)
+			drawRoute(frame, journey.Route, routeShown, zoom, centerLat, centerLng)
+			for j := 0; j < eventIdx; j++ {
+				drawMarker(frame, states[j].finalLogo, states[j].px, states[j].py)
+			}
+			drawMarker(frame, scaleImage(logo, size), st.px, st.py)
+			if err := writeFrame(frame); err != nil {
+				return err
+			}
+		}
+
+		// Bounce: 3 damped oscillations at final size after landing.
+		for f := 0; f < bounceFrames; f++ {
+			mult := bounceMultiplier(f, bounceFrames, 3, bounceAmp)
+			size := int(math.Round(float64(st.finalSize) * mult))
 			if size < 1 {
 				size = 1
 			}

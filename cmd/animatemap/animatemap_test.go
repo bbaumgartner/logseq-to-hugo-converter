@@ -188,6 +188,59 @@ func TestPositionRouteIndex_NotFound_ReturnsLast(t *testing.T) {
 	}
 }
 
+// ---- bounceMultiplier ----
+
+func TestBounceMultiplier_Endpoints(t *testing.T) {
+	// At f=0 the multiplier must be 1 (seamless join with end of fly-in).
+	if got := bounceMultiplier(0, 12, 3, bounceAmp); math.Abs(got-1) > 1e-9 {
+		t.Errorf("bounceMultiplier(f=0) = %v, want 1", got)
+	}
+	// At f=total the multiplier must be 1 (fully settled).
+	if got := bounceMultiplier(12, 12, 3, bounceAmp); math.Abs(got-1) > 1e-9 {
+		t.Errorf("bounceMultiplier(f=total) = %v, want 1", got)
+	}
+}
+
+func TestBounceMultiplier_ThreeExcursions(t *testing.T) {
+	// With nBounces=3 there must be 3 distinct regions where the multiplier
+	// deviates noticeably from 1. We use a region-counting approach because
+	// with 12 frames and 3 half-cycles the sine hits exactly 0 at the
+	// crossing frames, so a strict sign-change check would miss them.
+	const (
+		total     = 12
+		amp       = 0.25
+		threshold = 0.02 // minimum deviation to count as a bounce
+	)
+	inExcursion := false
+	excursions := 0
+	for f := 0; f <= total; f++ {
+		if math.Abs(bounceMultiplier(f, total, 3, amp)-1) > threshold {
+			if !inExcursion {
+				excursions++
+				inExcursion = true
+			}
+		} else {
+			inExcursion = false
+		}
+	}
+	if excursions < 3 {
+		t.Errorf("expected ≥3 bounce excursions, got %d", excursions)
+	}
+}
+
+func TestBounceMultiplier_DecayingAmplitude(t *testing.T) {
+	// The magnitude of the excursion should decrease over time (damping).
+	const (
+		total = 24
+		amp   = 0.25
+	)
+	firstPeak := math.Abs(bounceMultiplier(total/6, total, 3, amp) - 1)
+	lastPeak := math.Abs(bounceMultiplier(5*total/6, total, 3, amp) - 1)
+	if firstPeak <= lastPeak {
+		t.Errorf("bounce amplitude should decrease: first=%v, last=%v", firstPeak, lastPeak)
+	}
+}
+
 // ---- holdFramesForDays ----
 
 func TestHoldFramesForDays_Endpoints(t *testing.T) {
@@ -223,7 +276,7 @@ func TestHoldFramesForDays_MonotonicallyNonDecreasing(t *testing.T) {
 
 func TestTotalFrames(t *testing.T) {
 	single := []Position{{Days: 1}}
-	want := flyInFrames + holdFramesForDays(1) + finalHold
+	want := flyInFrames + bounceFrames + holdFramesForDays(1) + finalHold
 	if got := totalFrames(single); got != want {
 		t.Errorf("totalFrames(1-day) = %d, want %d", got, want)
 	}
