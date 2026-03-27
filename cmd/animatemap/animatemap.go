@@ -52,16 +52,9 @@ type Position struct {
 	Days int     `json:"days"`
 }
 
-// LatLng is a coordinate pair used for the route polyline.
-type LatLng struct {
-	Lat float64 `json:"lat"`
-	Lng float64 `json:"lng"`
-}
-
 // JourneyMap mirrors the top-level structure written by cmd/journeymap.
 type JourneyMap struct {
 	Positions []Position `json:"positions"`
-	Route     []LatLng   `json:"route"`
 }
 
 func main() {

@@ -134,9 +134,9 @@ git_commit_and_push() {
     if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
 
         # Check whether anything changed beyond the journey map files.
-        # Changes limited to journey-map.png / journey.json alone do not
+        # Changes limited to journey-map.mp4 / journey.json alone do not
         # warrant a deployment, so we skip the commit in that case.
-        non_journey_changes=$(git status --porcelain | grep -v -E '(static/journey-map\.png|data/journey\.json)$')
+        non_journey_changes=$(git status --porcelain | grep -v -E '(static/journey-map\.mp4|data/journey\.json)$')
 
         if [ -z "$non_journey_changes" ]; then
             echo -e "${YELLOW}Only journey map files changed — skipping commit to avoid unnecessary deployment${NC}"
@@ -311,18 +311,18 @@ convert_all_files() {
     fi
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
-    # Generate journey map if git repo (Hugo site) is configured
+    # Generate animated journey map if git repo (Hugo site) is configured
     if [ -n "$GIT_REPO_DIR" ]; then
         echo ""
-        echo -e "${YELLOW}Generating journey map...${NC}"
+        echo -e "${YELLOW}Generating animated journey map...${NC}"
         JOURNEY_JSON="$GIT_REPO_DIR/data/journey.json"
-        JOURNEY_PNG="$GIT_REPO_DIR/static/journey-map.png"
+        JOURNEY_MP4="$GIT_REPO_DIR/static/journey-map.mp4"
         if (cd "$SCRIPT_DIR" && go run ./cmd/journeymap "$INPUT_DIR/journals" "$JOURNEY_JSON") 2>&1; then
             if [ -f "$JOURNEY_JSON" ]; then
-                if (cd "$SCRIPT_DIR" && go run ./cmd/rendermap "$JOURNEY_JSON" "$JOURNEY_PNG") 2>&1; then
-                    echo -e "${GREEN}Journey map written to $JOURNEY_PNG${NC}"
+                if (cd "$SCRIPT_DIR" && go run ./cmd/animatemap "$JOURNEY_JSON" "$JOURNEY_MP4") 2>&1; then
+                    echo -e "${GREEN}Animated journey map written to $JOURNEY_MP4${NC}"
                 else
-                    echo -e "${RED}Failed to render journey map${NC}"
+                    echo -e "${RED}Failed to render animated journey map${NC}"
                 fi
             fi
         else

@@ -23,20 +23,10 @@ type Position struct {
 	Days int     `json:"days"`
 }
 
-// LatLng is a coordinate pair used for the route polyline.
-type LatLng struct {
-	Lat float64 `json:"lat"`
-	Lng float64 `json:"lng"`
-}
-
 // JourneyMap is the structure written to journey.json.
-// Positions holds one entry per clustered stop (used for circles on the map).
-// Route holds one entry per original journal entry in travel order, mapped to
-// its cluster's representative coordinates — so revisited locations appear twice
-// and the polyline correctly reflects the actual path taken.
+// Positions holds one entry per clustered stop in chronological order.
 type JourneyMap struct {
 	Positions []Position `json:"positions"`
-	Route     []LatLng   `json:"route"`
 }
 
 var positionRegex = regexp.MustCompile(`(?i)current-position::\s*([-\d.]+)\s*,\s*([-\d.]+)`)
@@ -164,13 +154,12 @@ func extractPositions(dir string) (JourneyMap, error) {
 	return clusterPositions(withDays), nil
 }
 
-// clusterPositions merges entries within clusterThresholdDeg of each other into
-// a single Position, summing their days. The representative position and date are
-// taken from the first (earliest) entry that formed the cluster.
-//
-// The returned JourneyMap.Route records the cluster representative coordinates
-// for every original entry in chronological order — so revisited locations appear
-// twice and the polyline reflects the actual path taken.
+// clusterPositions merges *consecutive* entries within clusterThresholdDeg of
+// each other into a single Position, summing their days. Only the immediately
+// preceding cluster is considered for merging, so returning to a location after
+// leaving it always creates a new stop rather than silently collapsing into the
+// earlier visit. The representative position and date are taken from the first
+// (earliest) entry that started the run.
 func clusterPositions(entries []entryWithDays) JourneyMap {
 	type cluster struct {
 		lat, lng  float64
@@ -179,23 +168,16 @@ func clusterPositions(entries []entryWithDays) JourneyMap {
 	}
 
 	var clusters []cluster
-	var route []LatLng
 
 	for _, e := range entries {
-		matched := -1
-		for i := range clusters {
-			if math.Abs(e.lat-clusters[i].lat) <= clusterThresholdDeg &&
-				math.Abs(e.lng-clusters[i].lng) <= clusterThresholdDeg {
-				matched = i
-				break
-			}
-		}
-		if matched >= 0 {
-			clusters[matched].totalDays += e.days
+		last := len(clusters) - 1
+		if last >= 0 &&
+			math.Abs(e.lat-clusters[last].lat) <= clusterThresholdDeg &&
+			math.Abs(e.lng-clusters[last].lng) <= clusterThresholdDeg {
+			clusters[last].totalDays += e.days
 			fmt.Printf("Merging (%.5f, %.5f) on %s into cluster at (%.5f, %.5f) — combined %d days\n",
 				e.lat, e.lng, e.date.Format("2006-01-02"),
-				clusters[matched].lat, clusters[matched].lng, clusters[matched].totalDays)
-			route = append(route, LatLng{Lat: clusters[matched].lat, Lng: clusters[matched].lng})
+				clusters[last].lat, clusters[last].lng, clusters[last].totalDays)
 		} else {
 			clusters = append(clusters, cluster{
 				lat:       e.lat,
@@ -203,7 +185,6 @@ func clusterPositions(entries []entryWithDays) JourneyMap {
 				date:      e.date,
 				totalDays: e.days,
 			})
-			route = append(route, LatLng{Lat: e.lat, Lng: e.lng})
 		}
 	}
 
@@ -217,7 +198,7 @@ func clusterPositions(entries []entryWithDays) JourneyMap {
 			Days: c.totalDays,
 		}
 	}
-	return JourneyMap{Positions: positions, Route: route}
+	return JourneyMap{Positions: positions}
 }
 
 func writeJSON(journey JourneyMap, outputPath string) error {

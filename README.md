@@ -1,5 +1,5 @@
 # logseq-to-hugo-converter
-Takes a Logseq markdown file and converts specially annotated lists to blog posts ready to be served with Hugo. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian, and Pirate Speak), and generates a static journey map image from GPS positions recorded in Logseq journals.
+Takes a Logseq markdown file and converts specially annotated lists to blog posts ready to be served with Hugo. Includes automatic translation to multiple languages (English, German, Spanish, French, Italian, and Pirate Speak), and generates an animated journey map video from GPS positions recorded in Logseq journals.
 
 We use Logseq for our log book and wanted to also be able to create blog posts right out of the log book, and visualise our sailing route on the homepage. See https://sailingnomads.ch for the blog.
 
@@ -84,6 +84,20 @@ sudo apt install inotify-tools
 
 The script will automatically use the correct tool based on your OS.
 
+### ffmpeg (for the animated journey map)
+
+The `cmd/animatemap` tool assembles the animation frames into an MP4 using `ffmpeg`.
+
+#### macOS
+```bash
+brew install ffmpeg
+```
+
+#### Linux/Ubuntu
+```bash
+sudo apt install ffmpeg
+```
+
 ### OpenAI API Key (for automatic translation)
 
 To enable automatic translation of blog posts, you need to set the `OPENAI_API_KEY` environment variable:
@@ -154,12 +168,12 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 **Workflow:**
 1. Watches for changes in Logseq directories
 2. Converts all markdown files to Hugo format
-3. **Generates the journey map** — extracts `current-position::` entries from journals, writes `data/journey.json`, and renders `static/journey-map.png`
+3. **Generates the animated journey map** — extracts `current-position::` entries from journals, writes `data/journey.json`, and renders `static/journey-map.mp4`
 4. **Automatically translates** any new or modified `index.<lang>.md` files using the translation tool
 5. Commits all changes (conversions + translations + map, when content also changed)
 6. Pushes to remote (unless `-try` flag is used)
 
-> **Note:** If the only files that changed are `data/journey.json` and `static/journey-map.png`, the commit is skipped. This avoids triggering a deployment (and its cost) just because your GPS position changed.
+> **Note:** If the only files that changed are `data/journey.json` and `static/journey-map.mp4`, the commit is skipped. This avoids triggering a deployment (and its cost) just because your GPS position changed.
 
 ### Manual Conversion
 
@@ -217,9 +231,9 @@ The `--target` flag accepts a comma-separated list of language codes and limits 
 
 For more details, see [TRANSLATION_TOOL.md](TRANSLATION_TOOL.md).
 
-### Journey Map
+### Animated Journey Map
 
-When a git repository is configured, the watcher automatically generates a static journey map from GPS positions recorded in your Logseq journals.
+When a git repository is configured, the watcher automatically generates an animated journey map from GPS positions recorded in your Logseq journals.
 
 #### How it works
 
@@ -229,30 +243,29 @@ When a git repository is configured, the watcher automatically generates a stati
    ```
    The position is assumed to be current from that journal date until the next `current-position::` entry appears.
 
-2. **`cmd/journeymap`** scans all journal files, extracts positions, filters out home-base entries (within ~1° of Ticino, Switzerland), merges nearby stops into a single cluster (within ~0.1°, roughly the size of a harbour), and writes `data/journey.json`.
+2. **`cmd/journeymap`** scans all journal files, extracts positions, filters out home-base entries (within ~1° of Ticino, Switzerland), merges *consecutive* nearby entries into a single stop (within ~0.1°, roughly the size of a harbour), and writes `data/journey.json`. Returning to a location after leaving it always creates a new stop rather than collapsing into the earlier visit.
 
-3. **`cmd/rendermap`** reads `journey.json` and renders `static/journey-map.png` using OpenStreetMap tiles via [go-staticmaps](https://github.com/flopp/go-staticmaps):
-   - Circles sized proportionally (√days) to duration of stay
-   - Color gradient from gray (oldest) to sailing blue (newest)
-   - A route polyline that faithfully follows the actual travel path, including revisits to the same location
+3. **`cmd/animatemap`** reads `journey.json` and renders `static/journey-map.mp4`:
+   - One logo marker per stop, sized proportionally to duration of stay (30 px for 1-day stays, 100 px for 30+ days)
+   - Markers fly in one by one in chronological order, with consecutive fly-ins overlapping for a smooth feel
+   - Each marker lands with a brief bounce animation, then holds for a duration proportional to the length of stay
+   - Base map tiles fetched from OpenStreetMap via [go-staticmaps](https://github.com/flopp/go-staticmaps); frames assembled into H.264 MP4 by `ffmpeg`
+
+The homepage `<video>` element plays the animation once when it scrolls into view.
 
 #### journey.json format
 
 ```json
 {
   "positions": [
-    { "date": "2026-03-14", "lat": 45.50543, "lng": 13.59597, "days": 5 }
-  ],
-  "route": [
-    { "lat": 45.50543, "lng": 13.59597 },
-    { "lat": 45.15039, "lng": 13.59877 },
-    { "lat": 45.50543, "lng": 13.59597 }
+    { "date": "2026-03-14", "lat": 45.50543, "lng": 13.59597, "days": 4 },
+    { "date": "2026-03-18", "lat": 45.15039, "lng": 13.59877, "days": 1 },
+    { "date": "2026-03-19", "lat": 45.50591, "lng": 13.59765, "days": 1 }
   ]
 }
 ```
 
-- `positions` — one entry per clustered stop; used to draw the circles
-- `route` — one entry per original journal entry in travel order, mapped to its cluster's representative coordinates; used to draw the polyline (revisited locations appear twice so the path is correct)
+Each entry in `positions` is one distinct stop — consecutive journal entries at the same location are merged, but returning to a location after leaving always produces a new entry.
 
 #### Running the tools manually
 
@@ -260,8 +273,8 @@ When a git repository is configured, the watcher automatically generates a stati
 # Step 1 – extract positions from journals
 go run ./cmd/journeymap /path/to/logseq/journals /path/to/hugo/data/journey.json
 
-# Step 2 – render the map
-go run ./cmd/rendermap /path/to/hugo/data/journey.json /path/to/hugo/static/journey-map.png
+# Step 2 – render the animated map
+go run ./cmd/animatemap /path/to/hugo/data/journey.json /path/to/hugo/static/journey-map.mp4
 ```
 
 ### Requirements for Blog Posts
@@ -407,7 +420,7 @@ note right of Main
   4. Processes each post
   5. Writes Hugo output
   (cmd/journeymap and
-   cmd/rendermap are separate
+   cmd/animatemap are separate
    pipeline steps)
 end note
 
@@ -441,13 +454,15 @@ end note
 │   │   └── translate_test.go      Tests
 │   ├── journeymap/            🗺️  Position extractor
 │   │   ├── journeymap.go          Extracts current-position:: entries,
-│   │   │                          filters home, clusters nearby stops,
-│   │   │                          writes journey.json
+│   │   │                          filters home, clusters consecutive nearby
+│   │   │                          stops, writes journey.json
 │   │   └── journeymap_test.go     Tests
-│   └── rendermap/             🖼️  Map renderer
-│       ├── rendermap.go           Reads journey.json, renders PNG via
-│       │                          go-staticmaps + OpenStreetMap tiles
-│       └── rendermap_test.go      Tests
+│   └── animatemap/            🎬 Animated map renderer
+│       ├── animatemap.go          Reads journey.json, renders an MP4
+│       │                          animation via go-staticmaps + ffmpeg;
+│       │                          markers fly in with bounce effect
+│       ├── animatemap_test.go     Tests
+│       └── logo.png               Embedded marker logo
 ├── test-nesting.md            📄 Deep nesting test fixture
 ├── test-multiple.md           📄 Multiple posts test fixture
 └── watch-and-convert.sh       👀 File watcher + pipeline orchestrator

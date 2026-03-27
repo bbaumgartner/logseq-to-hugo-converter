@@ -268,9 +268,6 @@ func TestClusterPositions_NoEntries(t *testing.T) {
 	if len(got.Positions) != 0 {
 		t.Errorf("expected 0 clusters, got %d", len(got.Positions))
 	}
-	if len(got.Route) != 0 {
-		t.Errorf("expected empty route, got %d entries", len(got.Route))
-	}
 }
 
 func TestClusterPositions_AllDistinct(t *testing.T) {
@@ -285,9 +282,6 @@ func TestClusterPositions_AllDistinct(t *testing.T) {
 	}
 	if got.Positions[0].Days != 10 || got.Positions[1].Days != 5 || got.Positions[2].Days != 7 {
 		t.Errorf("days mismatch: got %v", got.Positions)
-	}
-	if len(got.Route) != 3 {
-		t.Errorf("expected route length 3, got %d", len(got.Route))
 	}
 }
 
@@ -310,44 +304,31 @@ func TestClusterPositions_ConsecutiveMerge(t *testing.T) {
 	if got.Positions[0].Lat != 45.50543 {
 		t.Errorf("representative lat = %v, want 45.50543", got.Positions[0].Lat)
 	}
-	// Route should still have 2 entries (both berths in order).
-	if len(got.Route) != 2 {
-		t.Errorf("expected route length 2, got %d", len(got.Route))
-	}
 }
 
 func TestClusterPositions_LeaveAndReturn(t *testing.T) {
 	// Go to Portoroz, leave for a day trip south, return to Portoroz.
-	// Both Portoroz entries should merge into one cluster; Medulin stays separate.
-	// The route should be: Portoroz → Medulin → Portoroz (3 entries).
+	// Only consecutive entries at the same location are merged, so the return
+	// to Portoroz must appear as a separate third stop — not collapsed into the
+	// first visit.
 	entries := []entryWithDays{
-		makeEntry("2026-03-14", 45.50543, 13.59597, 4), // Portoroz
+		makeEntry("2026-03-14", 45.50543, 13.59597, 4), // Portoroz (first visit)
 		makeEntry("2026-03-18", 45.15039, 13.59877, 1), // Medulin (~40km south)
-		makeEntry("2026-03-19", 45.50591, 13.59765, 1), // back to Portoroz
+		makeEntry("2026-03-19", 45.50591, 13.59765, 1), // Portoroz (return visit)
 	}
 	got := clusterPositions(entries)
 
-	if len(got.Positions) != 2 {
-		t.Fatalf("expected 2 clusters (Portoroz + Medulin), got %d", len(got.Positions))
+	if len(got.Positions) != 3 {
+		t.Fatalf("expected 3 stops (Portoroz, Medulin, Portoroz), got %d", len(got.Positions))
 	}
-	if got.Positions[0].Days != 5 {
-		t.Errorf("Portoroz cluster days = %d, want 5 (4+1)", got.Positions[0].Days)
+	if got.Positions[0].Days != 4 {
+		t.Errorf("first Portoroz days = %d, want 4", got.Positions[0].Days)
 	}
 	if got.Positions[1].Days != 1 {
-		t.Errorf("Medulin cluster days = %d, want 1", got.Positions[1].Days)
+		t.Errorf("Medulin days = %d, want 1", got.Positions[1].Days)
 	}
-
-	// Route must have 3 entries reflecting the actual travel order.
-	if len(got.Route) != 3 {
-		t.Fatalf("expected route length 3 (Portoroz→Medulin→Portoroz), got %d", len(got.Route))
-	}
-	// First and third route entries should point to the Portoroz cluster representative.
-	if got.Route[0].Lat != 45.50543 || got.Route[2].Lat != 45.50543 {
-		t.Errorf("first and third route entries should be Portoroz cluster (lat 45.50543), got %v", got.Route)
-	}
-	// Second route entry should point to Medulin.
-	if got.Route[1].Lat != 45.15039 {
-		t.Errorf("second route entry should be Medulin (lat 45.15039), got %v", got.Route[1])
+	if got.Positions[2].Days != 1 {
+		t.Errorf("return Portoroz days = %d, want 1", got.Positions[2].Days)
 	}
 }
 
@@ -400,10 +381,6 @@ func TestWriteJSON_CreatesValidFile(t *testing.T) {
 			{Date: "2025-09-13", Lat: 45.5127, Lng: 13.5954, Days: 126},
 			{Date: "2026-01-17", Lat: 43.5088, Lng: 16.4402, Days: 10},
 		},
-		Route: []LatLng{
-			{Lat: 45.5127, Lng: 13.5954},
-			{Lat: 43.5088, Lng: 16.4402},
-		},
 	}
 
 	if err := writeJSON(journey, outputPath); err != nil {
@@ -422,9 +399,6 @@ func TestWriteJSON_CreatesValidFile(t *testing.T) {
 	if len(got.Positions) != len(journey.Positions) {
 		t.Fatalf("got %d positions, want %d", len(got.Positions), len(journey.Positions))
 	}
-	if len(got.Route) != len(journey.Route) {
-		t.Fatalf("got %d route entries, want %d", len(got.Route), len(journey.Route))
-	}
 	for i := range journey.Positions {
 		if got.Positions[i] != journey.Positions[i] {
 			t.Errorf("positions[%d] = %+v, want %+v", i, got.Positions[i], journey.Positions[i])
@@ -437,7 +411,6 @@ func TestWriteJSON_CreatesIntermediateDirectories(t *testing.T) {
 	outputPath := filepath.Join(dir, "subdir", "nested", "journey.json")
 	journey := JourneyMap{
 		Positions: []Position{{Date: "2025-09-13", Lat: 1, Lng: 2, Days: 3}},
-		Route:     []LatLng{{Lat: 1, Lng: 2}},
 	}
 
 	if err := writeJSON(journey, outputPath); err != nil {
@@ -465,7 +438,7 @@ func TestWriteJSON_EmptyJourneyMap(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatalf("output is not valid JSON: %v", err)
 	}
-	if len(got.Positions) != 0 || len(got.Route) != 0 {
+	if len(got.Positions) != 0 {
 		t.Errorf("expected empty JourneyMap in JSON, got %+v", got)
 	}
 }

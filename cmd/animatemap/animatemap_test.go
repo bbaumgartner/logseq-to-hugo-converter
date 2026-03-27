@@ -334,7 +334,6 @@ func TestGenerateAnimation_SkipsIfFFmpegMissing(t *testing.T) {
 	}
 	journey := JourneyMap{
 		Positions: []Position{{Lat: 45.5, Lng: 13.6, Days: 5}},
-		Route:     []LatLng{{Lat: 45.5, Lng: 13.6}},
 	}
 	err := generateAnimation(journey, filepath.Join(t.TempDir(), "out.mp4"))
 	if err == nil {
@@ -353,10 +352,6 @@ func TestGenerateAnimation_ProducesFile(t *testing.T) {
 		Positions: []Position{
 			{Date: "2025-09-13", Lat: 45.5127, Lng: 13.5954, Days: 10},
 			{Date: "2026-01-17", Lat: 43.5088, Lng: 16.4402, Days: 5},
-		},
-		Route: []LatLng{
-			{Lat: 45.5127, Lng: 13.5954},
-			{Lat: 43.5088, Lng: 16.4402},
 		},
 	}
 
