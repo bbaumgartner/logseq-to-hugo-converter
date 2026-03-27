@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"image"
-	"image/color"
 	stddraw "image/draw"
 	_ "image/png"
 	"math"
@@ -44,7 +43,6 @@ const (
 	finalHold     = 60   // frames for the completed map at the end (~2.5 s)
 )
 
-var routeColor = color.RGBA{R: 100, G: 100, B: 100, A: 180}
 
 // Position mirrors the clustered stop structure written by cmd/journeymap.
 type Position struct {
@@ -238,29 +236,6 @@ func scaleImage(src image.Image, size int) *image.RGBA {
 	return dst
 }
 
-// drawRoute renders the route polyline from route[0] to route[upTo-1] onto
-// frame using an antialiased gg context.
-func drawRoute(frame *image.RGBA, route []LatLng, upTo int, zoom int, centerLat, centerLng float64) {
-	if upTo < 2 {
-		return
-	}
-	dc := gg.NewContextForRGBA(frame)
-	dc.SetRGBA(
-		float64(routeColor.R)/255,
-		float64(routeColor.G)/255,
-		float64(routeColor.B)/255,
-		float64(routeColor.A)/255,
-	)
-	dc.SetLineWidth(2)
-	x0, y0 := latLngToPixel(route[0].Lat, route[0].Lng, zoom, centerLat, centerLng, imgWidth, imgHeight)
-	dc.MoveTo(x0, y0)
-	for i := 1; i < upTo; i++ {
-		xi, yi := latLngToPixel(route[i].Lat, route[i].Lng, zoom, centerLat, centerLng, imgWidth, imgHeight)
-		dc.LineTo(xi, yi)
-	}
-	dc.Stroke()
-}
-
 // drawMarker composites a pre-scaled logo image centred at pixel (px, py)
 // onto frame using alpha compositing.
 func drawMarker(frame *image.RGBA, scaled image.Image, px, py float64) {
@@ -269,21 +244,6 @@ func drawMarker(frame *image.RGBA, scaled image.Image, px, py float64) {
 	dy := int(math.Round(py)) - b.Dy()/2
 	dest := image.Rect(dx, dy, dx+b.Dx(), dy+b.Dy())
 	stddraw.Draw(frame, dest, scaled, b.Min, stddraw.Over)
-}
-
-// positionRouteIndex returns the first index in route where coordinates match
-// pos within clusterThreshold degrees (the same tolerance used by journeymap).
-// Returns the last index if no match is found.
-const clusterThreshold = 0.01
-
-func positionRouteIndex(pos Position, route []LatLng) int {
-	for i, r := range route {
-		if math.Abs(r.Lat-pos.Lat) <= clusterThreshold &&
-			math.Abs(r.Lng-pos.Lng) <= clusterThreshold {
-			return i
-		}
-	}
-	return len(route) - 1
 }
 
 // positionStartFrames returns the global frame at which each position's fly-in
@@ -348,12 +308,6 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 		}
 	}
 
-	// Find where each position first appears in the route.
-	routeIndices := make([]int, len(journey.Positions))
-	for i, p := range journey.Positions {
-		routeIndices[i] = positionRouteIndex(p, journey.Route)
-	}
-
 	// Each position's fly-in starts flyInOverlap frames before the current
 	// position's fly-in ends, so multiple markers animate simultaneously.
 	starts := positionStartFrames(journey.Positions)
@@ -378,22 +332,6 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 
 	for globalF := 0; globalF < total; globalF++ {
 		frame := cloneImage(baseMap)
-
-		// Route: reveal up to the latest position whose fly-in has started.
-		// During the final hold all route segments are visible.
-		routeUpTo := 0
-		if globalF >= total-finalHold {
-			routeUpTo = len(journey.Route)
-		} else {
-			for i, start := range starts {
-				if globalF >= start {
-					if ri := routeIndices[i] + 1; ri > routeUpTo {
-						routeUpTo = ri
-					}
-				}
-			}
-		}
-		drawRoute(frame, journey.Route, routeUpTo, zoom, centerLat, centerLng)
 
 		// Draw each position in arrival order (earlier positions rendered below
 		// later ones so newly arriving markers appear on top).

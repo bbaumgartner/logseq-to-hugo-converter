@@ -149,45 +149,6 @@ func TestMarkerSize_MonotonicallyNonDecreasing(t *testing.T) {
 	}
 }
 
-// ---- positionRouteIndex ----
-
-func TestPositionRouteIndex_FoundAtFirst(t *testing.T) {
-	route := []LatLng{{45.5, 13.6}, {43.5, 16.4}, {45.5, 13.6}}
-	pos := Position{Lat: 45.5, Lng: 13.6}
-	got := positionRouteIndex(pos, route)
-	if got != 0 {
-		t.Errorf("positionRouteIndex = %d, want 0", got)
-	}
-}
-
-func TestPositionRouteIndex_FoundInMiddle(t *testing.T) {
-	route := []LatLng{{45.5, 13.6}, {43.5, 16.4}, {44.0, 15.0}}
-	pos := Position{Lat: 43.5, Lng: 16.4}
-	got := positionRouteIndex(pos, route)
-	if got != 1 {
-		t.Errorf("positionRouteIndex = %d, want 1", got)
-	}
-}
-
-func TestPositionRouteIndex_WithinClusterThreshold(t *testing.T) {
-	// Slightly different coords within threshold should still match.
-	route := []LatLng{{45.5000, 13.6000}, {43.5000, 16.4000}}
-	pos := Position{Lat: 45.5005, Lng: 13.6005} // within 0.01 deg
-	got := positionRouteIndex(pos, route)
-	if got != 0 {
-		t.Errorf("positionRouteIndex = %d, want 0", got)
-	}
-}
-
-func TestPositionRouteIndex_NotFound_ReturnsLast(t *testing.T) {
-	route := []LatLng{{45.5, 13.6}, {43.5, 16.4}}
-	pos := Position{Lat: 0.0, Lng: 0.0} // far away
-	got := positionRouteIndex(pos, route)
-	if got != len(route)-1 {
-		t.Errorf("positionRouteIndex = %d, want %d (last)", got, len(route)-1)
-	}
-}
-
 // ---- bounceMultiplier ----
 
 func TestBounceMultiplier_Endpoints(t *testing.T) {
