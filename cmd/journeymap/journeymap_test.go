@@ -241,7 +241,8 @@ func TestExtractPositions_SpacesAroundComma(t *testing.T) {
 
 func TestExtractPositions_MinimumOneDayEnforced(t *testing.T) {
 	dir := t.TempDir()
-	today := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	writeJournal(t, dir, today.Format("2006-01-02"), "- current-position:: 45.0,13.0\n")
 
 	j, err := extractPositions(dir)

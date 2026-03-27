@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"image"
 	"math"
 	"os"
@@ -115,6 +116,43 @@ func TestChooseBoundsAndZoom_CentreIsArithmeticMidpoint(t *testing.T) {
 	}
 	if math.Abs(lng-15.0) > 1e-9 {
 		t.Errorf("centre lng = %v, want 15.0", lng)
+	}
+}
+
+// ---- linearInterp ----
+
+func TestLinearInterp_Endpoints(t *testing.T) {
+	if got := linearInterp(1, 10, 50); got != 10 {
+		t.Errorf("linearInterp(1, 10, 50) = %d, want 10", got)
+	}
+	if got := linearInterp(30, 10, 50); got != 50 {
+		t.Errorf("linearInterp(30, 10, 50) = %d, want 50", got)
+	}
+}
+
+func TestLinearInterp_Clamped(t *testing.T) {
+	if got := linearInterp(0, 10, 50); got != 10 {
+		t.Errorf("linearInterp(0, 10, 50) = %d, want 10 (clamped low)", got)
+	}
+	if got := linearInterp(-5, 10, 50); got != 10 {
+		t.Errorf("linearInterp(-5, 10, 50) = %d, want 10 (clamped low)", got)
+	}
+	if got := linearInterp(100, 10, 50); got != 50 {
+		t.Errorf("linearInterp(100, 10, 50) = %d, want 50 (clamped high)", got)
+	}
+}
+
+func TestLinearInterp_Midpoint(t *testing.T) {
+	got := linearInterp(15, 0, 100)
+	// days=15 is roughly halfway in [1,30] → ~48
+	if got < 40 || got > 60 {
+		t.Errorf("linearInterp(15, 0, 100) = %d, want ~48", got)
+	}
+}
+
+func TestLinearInterp_EqualMinMax(t *testing.T) {
+	if got := linearInterp(10, 42, 42); got != 42 {
+		t.Errorf("linearInterp(10, 42, 42) = %d, want 42", got)
 	}
 }
 
@@ -323,6 +361,68 @@ func TestCloneImage_IsIndependent(t *testing.T) {
 	// Mutating the clone must not affect src.
 	if src.RGBAAt(0, 0).R != 255 {
 		t.Error("cloneImage: modifying clone affected source")
+	}
+}
+
+// ---- loadJourneyMap ----
+
+func TestLoadJourneyMap_ValidJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "journey.json")
+	j := JourneyMap{Positions: []Position{{Date: "2025-09-13", Lat: 45.5, Lng: 13.6, Days: 10}}}
+	data, _ := json.Marshal(j)
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadJourneyMap(path)
+	if err != nil {
+		t.Fatalf("loadJourneyMap() error: %v", err)
+	}
+	if len(got.Positions) != 1 || got.Positions[0].Lat != 45.5 {
+		t.Errorf("loadJourneyMap() = %+v, want 1 position at lat 45.5", got)
+	}
+}
+
+func TestLoadJourneyMap_MissingFile(t *testing.T) {
+	_, err := loadJourneyMap(filepath.Join(t.TempDir(), "nonexistent.json"))
+	if err == nil {
+		t.Error("loadJourneyMap() expected error for missing file, got nil")
+	}
+}
+
+func TestLoadJourneyMap_MalformedJSON(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.json")
+	if err := os.WriteFile(path, []byte("{not json}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadJourneyMap(path)
+	if err == nil {
+		t.Error("loadJourneyMap() expected error for malformed JSON, got nil")
+	}
+}
+
+func TestLoadJourneyMap_EmptyPositions(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "empty.json")
+	if err := os.WriteFile(path, []byte(`{"positions":[]}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := loadJourneyMap(path)
+	if err != nil {
+		t.Fatalf("loadJourneyMap() error: %v", err)
+	}
+	if len(got.Positions) != 0 {
+		t.Errorf("expected 0 positions, got %d", len(got.Positions))
+	}
+}
+
+// ---- chooseBoundsAndZoom empty ----
+
+func TestChooseBoundsAndZoom_Empty(t *testing.T) {
+	lat, lng, zoom := chooseBoundsAndZoom(nil, imgWidth, imgHeight)
+	if lat != 0 || lng != 0 || zoom != 1 {
+		t.Errorf("chooseBoundsAndZoom(nil) = (%v, %v, %d), want (0, 0, 1)", lat, lng, zoom)
 	}
 }
 

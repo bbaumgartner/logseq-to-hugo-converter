@@ -1,8 +1,8 @@
 // Package main reads a journey.json file and renders an animated MP4 showing
-// the journey building up stop by stop. For each new position the route line
-// reveals up to that stop and the logo marker flies in (starts large, eases
-// down to its final size). Frames are written to a temp directory and assembled
-// into an H.264 MP4 via ffmpeg.
+// the journey building up stop by stop. For each new position the logo marker
+// flies in (starts large, eases down to its final size) and bounces on
+// landing. Frames are written to a temp directory and assembled into an
+// H.264 MP4 via ffmpeg.
 package main
 
 import (
@@ -165,6 +165,9 @@ func latLngToPixel(lat, lng float64, zoom int, centerLat, centerLng float64, img
 // selects the largest zoom level (up to 15) where every position falls at
 // least padding pixels inside the image edges.
 func chooseBoundsAndZoom(positions []Position, imgW, imgH int) (centerLat, centerLng float64, zoom int) {
+	if len(positions) == 0 {
+		return 0, 0, 1
+	}
 	minLat, maxLat := positions[0].Lat, positions[0].Lat
 	minLng, maxLng := positions[0].Lng, positions[0].Lng
 	for _, p := range positions[1:] {
@@ -323,8 +326,19 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 		return gg.SavePNG(path, img)
 	}
 
+	frame := image.NewRGBA(baseMap.Bounds())
+	scaledCache := make(map[int]*image.RGBA)
+	cachedScale := func(size int) *image.RGBA {
+		if img, ok := scaledCache[size]; ok {
+			return img
+		}
+		img := scaleImage(logo, size)
+		scaledCache[size] = img
+		return img
+	}
+
 	for globalF := 0; globalF < total; globalF++ {
-		frame := cloneImage(baseMap)
+		stddraw.Draw(frame, frame.Bounds(), baseMap, baseMap.Bounds().Min, stddraw.Src)
 
 		// Draw each position in arrival order (earlier positions rendered below
 		// later ones so newly arriving markers appear on top).
@@ -345,7 +359,10 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 			case localF < flyInFrames:
 				// Fly-in: ease-in quadratic (starts slow, ends fast — gravity-like)
 				// so the logo arrives with velocity and flows directly into the bounce.
-				t := float64(localF) / float64(flyInFrames-1)
+				t := 1.0
+				if flyInFrames > 1 {
+					t = float64(localF) / float64(flyInFrames-1)
+				}
 				scale := flyInScale - t*t*(flyInScale-1)
 				size = int(math.Round(float64(st.finalSize) * scale))
 			case localF < flyInFrames+bounceFrames:
@@ -361,7 +378,7 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 			if size < 1 {
 				size = 1
 			}
-			drawMarker(frame, scaleImage(logo, size), st.px, st.py)
+			drawMarker(frame, cachedScale(size), st.px, st.py)
 		}
 
 		if err := writeFrame(frame); err != nil {

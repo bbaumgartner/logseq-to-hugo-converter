@@ -29,7 +29,7 @@ type JourneyMap struct {
 	Positions []Position `json:"positions"`
 }
 
-var positionRegex = regexp.MustCompile(`(?i)current-position::\s*([-\d.]+)\s*,\s*([-\d.]+)`)
+var positionRegex = regexp.MustCompile(`(?i)current-position::\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)`)
 
 // homeLat/homeLng is the home base location. Positions within homeExclusionDeg
 // degrees in both axes are excluded from the journey map.
@@ -104,19 +104,20 @@ func extractPositions(dir string) (JourneyMap, error) {
 
 		content, err := os.ReadFile(f)
 		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: could not read %s: %v\n", f, err)
 			continue
 		}
 
-		matches := positionRegex.FindStringSubmatch(string(content))
+		matches := positionRegex.FindSubmatch(content)
 		if matches == nil {
 			continue
 		}
 
-		lat, err := strconv.ParseFloat(matches[1], 64)
+		lat, err := strconv.ParseFloat(string(matches[1]), 64)
 		if err != nil {
 			continue
 		}
-		lng, err := strconv.ParseFloat(matches[2], 64)
+		lng, err := strconv.ParseFloat(string(matches[2]), 64)
 		if err != nil {
 			continue
 		}
@@ -134,7 +135,8 @@ func extractPositions(dir string) (JourneyMap, error) {
 	})
 
 	// Phase 1: compute raw days per entry (diff to next entry, or to today).
-	today := time.Now().Truncate(24 * time.Hour)
+	now := time.Now()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	withDays := make([]entryWithDays, len(entries))
 	for i, e := range entries {
 		var nextDate time.Time
