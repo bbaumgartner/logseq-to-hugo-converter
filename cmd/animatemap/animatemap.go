@@ -10,9 +10,9 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	stddraw "image/draw"
 	"image"
 	"image/color"
+	stddraw "image/draw"
 	_ "image/png"
 	"math"
 	"os"
@@ -30,10 +30,12 @@ var logoBytes []byte
 
 // Animation timing (all in frames at fps).
 const (
-	imgWidth      = 900
-	imgHeight     = 500
-	fps           = 24
-	flyInFrames   = 15   // frames for the fly-in shrink animation (smooth ease-out)
+	imgWidth     = 900
+	imgHeight    = 500
+	fps          = 24
+	flyInFrames  = 20 // frames for the fly-in shrink animation
+	flyInOverlap = 5  // fly-in frames shared with the NEXT position's fly-in;
+	//                      next position starts (flyInFrames-flyInOverlap) frames after current
 	flyInScale    = 4.0  // starting size multiplier relative to final size
 	bounceFrames  = 12   // frames for 3 post-landing bounces (~0.5 s)
 	bounceAmp     = 0.25 // amplitude of each bounce (0.25 = 25% undershoot/overshoot)
@@ -284,14 +286,31 @@ func positionRouteIndex(pos Position, route []LatLng) int {
 	return len(route) - 1
 }
 
+// positionStartFrames returns the global frame at which each position's fly-in
+// begins. Consecutive positions are staggered by (flyInFrames - flyInOverlap)
+// so that their fly-in animations partially overlap.
+func positionStartFrames(positions []Position) []int {
+	starts := make([]int, len(positions))
+	if len(positions) == 0 {
+		return starts
+	}
+	offset := flyInFrames - flyInOverlap
+	for i := 1; i < len(positions); i++ {
+		starts[i] = starts[i-1] + offset
+	}
+	return starts
+}
+
 // totalFrames returns the total number of frames the animation will produce.
 // Useful for progress reporting and testing.
 func totalFrames(positions []Position) int {
-	total := finalHold
-	for _, p := range positions {
-		total += flyInFrames + bounceFrames + holdFramesForDays(p.Days)
+	if len(positions) == 0 {
+		return finalHold
 	}
-	return total
+	starts := positionStartFrames(positions)
+	last := len(positions) - 1
+	lastEnd := starts[last] + flyInFrames + bounceFrames + holdFramesForDays(positions[last].Days)
+	return lastEnd + finalHold
 }
 
 // markerState groups precomputed pixel position, final size, and
@@ -335,6 +354,10 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 		routeIndices[i] = positionRouteIndex(p, journey.Route)
 	}
 
+	// Each position's fly-in starts flyInOverlap frames before the current
+	// position's fly-in ends, so multiple markers animate simultaneously.
+	starts := positionStartFrames(journey.Positions)
+
 	tmpDir, err := os.MkdirTemp("", "animatemap_*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
@@ -353,74 +376,63 @@ func generateAnimation(journey JourneyMap, outputPath string) error {
 		return gg.SavePNG(path, img)
 	}
 
-	routeShown := 0
-
-	for eventIdx := range journey.Positions {
-		routeShown = routeIndices[eventIdx] + 1
-		st := states[eventIdx]
-
-		// Fly-in: logo shrinks from flyInScale × finalSize to finalSize.
-		// Ease-IN (t²): logo accelerates as it falls, arriving with velocity
-		// rather than decelerating to a stop, so it flows directly into the bounce.
-		for f := 0; f < flyInFrames; f++ {
-			t := float64(f) / float64(flyInFrames-1) // 0→1
-			easedT := t * t                          // ease-in quadratic: starts slow, ends fast
-			scale := flyInScale - easedT*(flyInScale-1)
-			size := int(math.Round(float64(st.finalSize) * scale))
-			if size < 1 {
-				size = 1
-			}
-
-			frame := cloneImage(baseMap)
-			drawRoute(frame, journey.Route, routeShown, zoom, centerLat, centerLng)
-			for j := 0; j < eventIdx; j++ {
-				drawMarker(frame, states[j].finalLogo, states[j].px, states[j].py)
-			}
-			drawMarker(frame, scaleImage(logo, size), st.px, st.py)
-			if err := writeFrame(frame); err != nil {
-				return err
-			}
-		}
-
-		// Bounce: 3 damped oscillations at final size after landing.
-		for f := 0; f < bounceFrames; f++ {
-			mult := bounceMultiplier(f, bounceFrames, 3, bounceAmp)
-			size := int(math.Round(float64(st.finalSize) * mult))
-			if size < 1 {
-				size = 1
-			}
-
-			frame := cloneImage(baseMap)
-			drawRoute(frame, journey.Route, routeShown, zoom, centerLat, centerLng)
-			for j := 0; j < eventIdx; j++ {
-				drawMarker(frame, states[j].finalLogo, states[j].px, states[j].py)
-			}
-			drawMarker(frame, scaleImage(logo, size), st.px, st.py)
-			if err := writeFrame(frame); err != nil {
-				return err
-			}
-		}
-
-		// Hold: all positions up to and including eventIdx at final size.
-		for f := 0; f < holdFramesForDays(journey.Positions[eventIdx].Days); f++ {
-			frame := cloneImage(baseMap)
-			drawRoute(frame, journey.Route, routeShown, zoom, centerLat, centerLng)
-			for j := 0; j <= eventIdx; j++ {
-				drawMarker(frame, states[j].finalLogo, states[j].px, states[j].py)
-			}
-			if err := writeFrame(frame); err != nil {
-				return err
-			}
-		}
-	}
-
-	// Final hold: everything including any remaining route after the last position.
-	for f := 0; f < finalHold; f++ {
+	for globalF := 0; globalF < total; globalF++ {
 		frame := cloneImage(baseMap)
-		drawRoute(frame, journey.Route, len(journey.Route), zoom, centerLat, centerLng)
-		for j := range journey.Positions {
-			drawMarker(frame, states[j].finalLogo, states[j].px, states[j].py)
+
+		// Route: reveal up to the latest position whose fly-in has started.
+		// During the final hold all route segments are visible.
+		routeUpTo := 0
+		if globalF >= total-finalHold {
+			routeUpTo = len(journey.Route)
+		} else {
+			for i, start := range starts {
+				if globalF >= start {
+					if ri := routeIndices[i] + 1; ri > routeUpTo {
+						routeUpTo = ri
+					}
+				}
+			}
 		}
+		drawRoute(frame, journey.Route, routeUpTo, zoom, centerLat, centerLng)
+
+		// Draw each position in arrival order (earlier positions rendered below
+		// later ones so newly arriving markers appear on top).
+		for i, start := range starts {
+			localF := globalF - start
+			if localF < 0 {
+				continue // not started yet
+			}
+			st := states[i]
+			animLen := flyInFrames + bounceFrames + holdFramesForDays(journey.Positions[i].Days)
+
+			var size int
+			switch {
+			case localF >= animLen:
+				// Animation finished: stays at final size for the rest of the video.
+				drawMarker(frame, st.finalLogo, st.px, st.py)
+				continue
+			case localF < flyInFrames:
+				// Fly-in: ease-in quadratic (starts slow, ends fast — gravity-like)
+				// so the logo arrives with velocity and flows directly into the bounce.
+				t := float64(localF) / float64(flyInFrames-1)
+				scale := flyInScale - t*t*(flyInScale-1)
+				size = int(math.Round(float64(st.finalSize) * scale))
+			case localF < flyInFrames+bounceFrames:
+				// Bounce: 3 damped oscillations at final size.
+				mult := bounceMultiplier(localF-flyInFrames, bounceFrames, 3, bounceAmp)
+				size = int(math.Round(float64(st.finalSize) * mult))
+			default:
+				// Hold: static at final size.
+				drawMarker(frame, st.finalLogo, st.px, st.py)
+				continue
+			}
+
+			if size < 1 {
+				size = 1
+			}
+			drawMarker(frame, scaleImage(logo, size), st.px, st.py)
+		}
+
 		if err := writeFrame(frame); err != nil {
 			return err
 		}

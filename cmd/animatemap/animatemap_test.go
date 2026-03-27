@@ -272,9 +272,46 @@ func TestHoldFramesForDays_MonotonicallyNonDecreasing(t *testing.T) {
 	}
 }
 
+// ---- positionStartFrames ----
+
+func TestPositionStartFrames_Empty(t *testing.T) {
+	starts := positionStartFrames([]Position{})
+	if len(starts) != 0 {
+		t.Errorf("positionStartFrames(empty) len = %d, want 0", len(starts))
+	}
+}
+
+func TestPositionStartFrames_Single(t *testing.T) {
+	starts := positionStartFrames([]Position{{Days: 1}})
+	if len(starts) != 1 || starts[0] != 0 {
+		t.Errorf("positionStartFrames(single) = %v, want [0]", starts)
+	}
+}
+
+func TestPositionStartFrames_Offset(t *testing.T) {
+	positions := []Position{{Days: 1}, {Days: 1}, {Days: 1}}
+	starts := positionStartFrames(positions)
+	offset := flyInFrames - flyInOverlap
+	for i, got := range starts {
+		if want := i * offset; got != want {
+			t.Errorf("starts[%d] = %d, want %d", i, got, want)
+		}
+	}
+}
+
+func TestPositionStartFrames_OverlapLessThanFlyIn(t *testing.T) {
+	// Each position must start before the previous one's fly-in ends.
+	positions := []Position{{Days: 1}, {Days: 1}}
+	starts := positionStartFrames(positions)
+	if starts[1] >= flyInFrames {
+		t.Errorf("starts[1]=%d should be < flyInFrames=%d for overlap to occur", starts[1], flyInFrames)
+	}
+}
+
 // ---- totalFrames ----
 
 func TestTotalFrames(t *testing.T) {
+	// A single position is unaffected by overlap logic.
 	single := []Position{{Days: 1}}
 	want := flyInFrames + bounceFrames + holdFramesForDays(1) + finalHold
 	if got := totalFrames(single); got != want {
@@ -286,7 +323,14 @@ func TestTotalFrames(t *testing.T) {
 		t.Errorf("totalFrames(empty) = %d, want %d", got, finalHold)
 	}
 
-	// Longer stays produce more total frames than shorter ones.
+	// With overlap, two positions take fewer frames than 2× a single position.
+	twoPositions := []Position{{Days: 1}, {Days: 1}}
+	if got := totalFrames(twoPositions); got >= 2*totalFrames(single) {
+		t.Errorf("overlapping two positions should take fewer frames than 2× single: got %d, 2×single=%d",
+			got, 2*totalFrames(single))
+	}
+
+	// Longer stays produce more total frames than shorter ones (hold dominates).
 	short := []Position{{Days: 1}, {Days: 1}}
 	long := []Position{{Days: 30}, {Days: 30}}
 	if totalFrames(short) >= totalFrames(long) {
