@@ -46,20 +46,26 @@ func TestGetTargetLanguages(t *testing.T) {
 		{
 			name:       "Source is German",
 			sourceLang: "de",
-			wantCount:  4,
-			wantCodes:  []string{"en", "es", "fr", "it"},
+			wantCount:  5,
+			wantCodes:  []string{"en", "es", "fr", "it", "arrr"},
 		},
 		{
 			name:       "Source is English",
 			sourceLang: "en",
-			wantCount:  4,
-			wantCodes:  []string{"de", "es", "fr", "it"},
+			wantCount:  5,
+			wantCodes:  []string{"de", "es", "fr", "it", "arrr"},
 		},
 		{
 			name:       "Source is Spanish",
 			sourceLang: "es",
-			wantCount:  4,
-			wantCodes:  []string{"en", "de", "fr", "it"},
+			wantCount:  5,
+			wantCodes:  []string{"en", "de", "fr", "it", "arrr"},
+		},
+		{
+			name:       "Source is Pirate Speak",
+			sourceLang: "arrr",
+			wantCount:  5,
+			wantCodes:  []string{"en", "de", "es", "fr", "it"},
 		},
 	}
 

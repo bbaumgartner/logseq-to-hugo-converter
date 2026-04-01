@@ -161,7 +161,7 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 - Automatically detects OS (macOS/Linux) and uses the appropriate file watching tool
 - Monitors changes in `assets/`, `journals/`, and `pages/` subdirectories
 - Waits 30 minutes after detecting changes to batch multiple edits together
-- **Automatic translation**: Detects new or changed markdown files and translates them to all supported languages (English, German, Spanish, French, Italian)
+- **Automatic translation**: Detects new or changed markdown files and translates them to all supported languages (English, German, Spanish, French, Italian, Pirate Speak)
 - Optionally commits and pushes changes to a git repository
 - Try mode (`-try` flag) for testing without pushing to remote
 
@@ -212,22 +212,15 @@ When using the file watcher with a git repository configured, the script automat
 **Manual translation:**
 You can also translate individual files manually:
 ```bash
-go run ./cmd/translate <input_file.md> [--target <lang1,lang2,...>]
+go run ./cmd/translate <input_file.md>
 ```
 
-**Examples:**
+**Example:**
 ```bash
-# Translate to all supported languages
 go run ./cmd/translate 2025-09-13_SKS/index.de.md
-
-# Translate to a single specific language
-go run ./cmd/translate 2025-09-13_SKS/index.en.md --target arrr
-
-# Translate to multiple specific languages
-go run ./cmd/translate 2025-09-13_SKS/index.en.md --target es,fr,arrr
 ```
 
-The `--target` flag accepts a comma-separated list of language codes and limits translation to only those languages. Without it, all supported languages are generated (except the source language). This is useful for adding a new language to posts that already have other translations.
+This translates to all supported languages except the source language.
 
 For more details, see [TRANSLATION_TOOL.md](TRANSLATION_TOOL.md).
 

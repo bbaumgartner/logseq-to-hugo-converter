@@ -2,15 +2,13 @@
 //
 // Usage:
 //
-//	go run translate.go <input_file.md> [--target <lang1,lang2,...>]
-//	go run translate.go 2025-09-13_SKS/index.de.md
-//	go run translate.go 2025-09-13_SKS/index.en.md --target arrr
+//	go run ./cmd/translate <input_file.md>
+//	go run ./cmd/translate 2025-09-13_SKS/index.de.md
 //
 // The program will:
 // 1. Parse the input markdown file
 // 2. Detect the source language from the filename (e.g., index.de.md → German)
 // 3. Translate to all other supported languages (English, Spanish, French, Italian, German, Pirate Speak)
-//    or only to the languages specified via --target
 // 4. Write translated files in the same directory as the input file
 //
 // Requirements:
@@ -23,18 +21,15 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 )
 
 func main() {
-	// Check command-line arguments
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run translate.go <input_file.md> [--target <lang1,lang2,...>]")
+		fmt.Println("Usage: go run ./cmd/translate <input_file.md>")
 		fmt.Println()
-		fmt.Println("Examples:")
-		fmt.Println("  go run translate.go 2025-09-13_SKS/index.de.md")
-		fmt.Println("  go run translate.go 2025-09-13_SKS/index.en.md --target arrr")
+		fmt.Println("Example:")
+		fmt.Println("  go run ./cmd/translate 2025-09-13_SKS/index.de.md")
 		fmt.Println()
 		fmt.Println("Requirements:")
 		fmt.Println("  - OPENAI_API_KEY environment variable must be set")
@@ -44,25 +39,11 @@ func main() {
 
 	inputPath := os.Args[1]
 
-	// Parse optional --target flag
-	var targetFilter map[string]bool
-	for i := 2; i < len(os.Args)-1; i++ {
-		if os.Args[i] == "--target" {
-			targetFilter = make(map[string]bool)
-			for _, code := range strings.Split(os.Args[i+1], ",") {
-				targetFilter[strings.TrimSpace(code)] = true
-			}
-			break
-		}
-	}
-
-	// Verify file exists
 	if _, err := os.Stat(inputPath); os.IsNotExist(err) {
 		fmt.Printf("Error: File not found: %s\n", inputPath)
 		os.Exit(1)
 	}
 
-	// Parse the input file
 	fmt.Printf("📖 Parsing %s...\n", FormatOutputPath(inputPath))
 	markdownFile, err := ParseMarkdownFile(inputPath)
 	if err != nil {
@@ -73,14 +54,7 @@ func main() {
 	sourceLangName := getLanguageName(markdownFile.SourceLang)
 	fmt.Printf("✓ Detected source language: %s\n\n", sourceLangName)
 
-	// Get target languages (all languages except source, filtered by --target if provided)
-	allTargetLanguages := GetTargetLanguages(markdownFile.SourceLang)
-	var targetLanguages []Language
-	for _, lang := range allTargetLanguages {
-		if targetFilter == nil || targetFilter[lang.Code] {
-			targetLanguages = append(targetLanguages, lang)
-		}
-	}
+	targetLanguages := GetTargetLanguages(markdownFile.SourceLang)
 
 	if len(targetLanguages) == 0 {
 		fmt.Println("No target languages to translate to.")

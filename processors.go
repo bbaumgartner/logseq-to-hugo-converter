@@ -15,9 +15,11 @@ import (
 // ImageProcessor is responsible for handling all image-related operations.
 // It processes both inline images and header/featured images.
 type ImageProcessor struct {
-	inputDir   string         // Directory where input markdown file is located
-	outputDir  string         // Directory where processed images should be copied
-	assetRegex *regexp.Regexp // Compiled regex to find image references
+	inputDir          string         // Directory where input markdown file is located
+	outputDir         string         // Directory where processed images should be copied
+	assetRegex        *regexp.Regexp // Compiled regex to find image references
+	logseqVideoRegex  *regexp.Regexp // Compiled regex for Logseq {{video URL}} embeds
+	youtubeIDRegex    *regexp.Regexp // Compiled regex to extract YouTube video IDs
 }
 
 // NewImageProcessor creates a new ImageProcessor instance.
@@ -31,16 +33,9 @@ func NewImageProcessor(inputDir, outputDir string) *ImageProcessor {
 	return &ImageProcessor{
 		inputDir:  inputDir,
 		outputDir: outputDir,
-		// Compile the regex pattern for finding images
-		// Pattern breakdown:
-		//   !\[(.*?)\]     = Markdown image alt text: ![anything]
-		//   \(             = Opening parenthesis
-		//   (.*?assets\/)  = Capture path including "assets/"
-		//   (.*?)          = Capture the filename
-		//   \)             = Closing parenthesis
-		//   (?:\{[^}]*\})? = Optional non-capturing group for Logseq metadata like {:height 446, :width 778}
-		// Example match: ![photo](../assets/image.jpg){:height 100, :width 200}
 		assetRegex: regexp.MustCompile(`!\[(.*?)\]\((.*?assets\/)(.*?)\)(?:\{[^}]*\})?`),
+		logseqVideoRegex: regexp.MustCompile(`\{\{video\s+(https?://[^\s}]+)\s*\}\}`),
+		youtubeIDRegex:   regexp.MustCompile(`(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]+)`),
 	}
 }
 
@@ -78,8 +73,9 @@ func (p *ImageProcessor) ProcessContent(content string) string {
 		p.copyFile(src, dst)
 	}
 
-	// Update the content with a custom replacement function
-	// This allows us to check each match and decide how to replace it
+	// Convert Logseq {{video URL}} embeds to Hugo shortcodes
+	content = p.processVideoEmbeds(content)
+
 	result := p.assetRegex.ReplaceAllStringFunc(content, func(match string) string {
 		// Extract the parts of this match
 		parts := p.assetRegex.FindStringSubmatch(match)
@@ -173,6 +169,24 @@ func (p *ImageProcessor) copyFile(src, dst string) {
 	io.Copy(out, in)
 	
 	// Note: In production code, you might want to check the error from io.Copy
+}
+
+// processVideoEmbeds converts Logseq {{video URL}} embeds to Hugo shortcodes.
+// YouTube URLs become {{< youtube VIDEO_ID >}}.
+func (p *ImageProcessor) processVideoEmbeds(content string) string {
+	return p.logseqVideoRegex.ReplaceAllStringFunc(content, func(match string) string {
+		parts := p.logseqVideoRegex.FindStringSubmatch(match)
+		if len(parts) < 2 {
+			return match
+		}
+		url := parts[1]
+
+		if ytMatch := p.youtubeIDRegex.FindStringSubmatch(url); len(ytMatch) >= 2 {
+			return fmt.Sprintf(`{{< youtube %s >}}`, ytMatch[1])
+		}
+
+		return match
+	})
 }
 
 // isVideoFile checks if a filename has a video file extension.

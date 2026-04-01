@@ -51,36 +51,19 @@ source ~/.zshrc
 From the repository root:
 
 ```bash
-go run ./cmd/translate <path-to-index-file> [--target <lang1,lang2,...>]
+go run ./cmd/translate <path-to-index-file>
 ```
 
 Or if you've compiled the binary:
 
 ```bash
 cd cmd/translate
-./translate <path-to-index-file> [--target <lang1,lang2,...>]
+./translate <path-to-index-file>
 ```
 
-### `--target` Flag
+The tool always translates to **all** supported languages except the source.
 
-The optional `--target` flag restricts translation to a specific subset of languages, given as a comma-separated list of language codes. Without it, the tool translates to **all** supported languages except the source.
-
-```bash
-# Translate to all languages (default behaviour)
-go run ./cmd/translate 2025-09-13_SKS/index.de.md
-
-# Translate to one language only
-go run ./cmd/translate 2025-09-13_SKS/index.en.md --target arrr
-
-# Translate to several specific languages
-go run ./cmd/translate 2025-09-13_SKS/index.en.md --target es,fr,arrr
-```
-
-This is particularly useful when:
-- Adding a newly supported language to posts that already have other translations (avoids expensive re-translations)
-- Testing the output of a single language without waiting for all others
-
-### Examples
+### Example
 
 **Translate a German blog post to all languages:**
 ```bash
@@ -105,23 +88,6 @@ go run ./cmd/translate 2025-09-13_SKS/index.de.md
   ✓ Created: 2025-09-13_SKS/index.arrr.md
 
 ✅ Successfully translated to 5/5 languages
-```
-
-**Add only the Pirate Speak translation to an existing post:**
-```bash
-go run ./cmd/translate 2024-06-14_Renan/index.en.md --target arrr
-```
-
-**Output:**
-```
-📖 Parsing 2024-06-14_Renan/index.en.md...
-✓ Detected source language: English
-
-🌍 Translating from English to 1 languages...
-  → Translating to Pirate Speak... ✓
-  ✓ Created: 2024-06-14_Renan/index.arrr.md
-
-✅ Successfully translated to 1/1 languages
 ```
 
 ## Input File Requirements
@@ -198,7 +164,7 @@ Translation costs depend on content length. Approximate costs with GPT-4-turbo:
 - Medium blog post (~1500 words): ~$0.12-0.25 per language
 - Long blog post (~3000 words): ~$0.25-0.50 per language
 
-Each translation to 4 languages costs approximately 4x the per-language rate.
+Each translation to 5 languages costs approximately 5x the per-language rate.
 
 **Note**: The tool is optimized to extract the summary from translated content rather than translating it separately, saving approximately 10-20% on token costs.
 
@@ -237,19 +203,6 @@ Translate multiple blog posts to all languages:
 for file in */index.de.md; do
     echo "Translating $file..."
     go run ./cmd/translate "$file"
-    echo ""
-done
-```
-
-Add a single new language to all existing posts (without re-translating the others):
-
-```bash
-#!/bin/bash
-# add_pirate_speak.sh
-
-for file in */index.en.md; do
-    echo "Adding Pirate Speak for $file..."
-    go run ./cmd/translate "$file" --target arrr
     echo ""
 done
 ```

@@ -353,6 +353,64 @@ func TestConvertLogseqToHugo_DeepNesting(t *testing.T) {
 	}
 }
 
+func TestConvertLogseqToHugo_RijekaYouTubeEmbed(t *testing.T) {
+	inputPath := "examples/journals/2026_03_31.md"
+	expectedOutputDir := "2026-03-31_Rijeka"
+	expectedFilename := "index.de.md"
+
+	tempDir := t.TempDir()
+
+	outputs, err := convertFile(inputPath, tempDir)
+	if err != nil {
+		t.Fatalf("convertFile() error = %v", err)
+	}
+
+	if len(outputs) == 0 {
+		t.Fatalf("convertFile() returned no outputs")
+	}
+
+	output := outputs[0]
+
+	expectedDirName := filepath.Base(expectedOutputDir)
+	actualDirName := filepath.Base(output.Dir)
+	if actualDirName != expectedDirName {
+		t.Errorf("Output directory name = %v, want %v", actualDirName, expectedDirName)
+	}
+
+	if output.Filename != expectedFilename {
+		t.Errorf("Output filename = %v, want %v", output.Filename, expectedFilename)
+	}
+
+	indexPath := filepath.Join(output.Dir, expectedFilename)
+	actualContent, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated %s: %v", expectedFilename, err)
+	}
+
+	expectedIndexPath := filepath.Join(expectedOutputDir, expectedFilename)
+	expectedContent, err := os.ReadFile(expectedIndexPath)
+	if err != nil {
+		t.Fatalf("Failed to read expected %s: %v", expectedFilename, err)
+	}
+
+	actualStr := strings.TrimSpace(string(actualContent))
+	expectedStr := strings.TrimSpace(string(expectedContent))
+
+	if actualStr != expectedStr {
+		t.Errorf("%s content mismatch.\nExpected:\n%s\n\nActual:\n%s", expectedFilename, expectedStr, actualStr)
+	}
+
+	// Verify that YouTube embed was converted to Hugo shortcode
+	if !strings.Contains(actualStr, `{{< youtube pwo3MA2FTRw >}}`) {
+		t.Error("Expected YouTube shortcode {{< youtube pwo3MA2FTRw >}} not found in output")
+	}
+
+	// Verify that the original Logseq syntax is gone
+	if strings.Contains(actualStr, `{{video`) {
+		t.Error("Logseq {{video ...}} syntax should not appear in output")
+	}
+}
+
 func TestConvertLogseqToHugo_MultiplePosts(t *testing.T) {
 	// Setup: paths to test files
 	inputPath := "test-multiple.md"
