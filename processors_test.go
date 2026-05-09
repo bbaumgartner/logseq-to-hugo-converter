@@ -76,6 +76,48 @@ func TestProcessContent_YouTubeEmbed(t *testing.T) {
 	}
 }
 
+func TestProcessContent_SubfolderAssets(t *testing.T) {
+	inputDir := t.TempDir()
+	outputDir := t.TempDir()
+	processor := NewImageProcessor(inputDir, outputDir)
+
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "image in named subfolder",
+			input: `![renand](../assets/Renan/renand.jpg)`,
+			want:  `![renand](renand.jpg)`,
+		},
+		{
+			name:  "image in date subfolder",
+			input: `![photo](../assets/2026_04_24/lukas-oel_1777135107896_0.jpg)`,
+			want:  `![photo](lukas-oel_1777135107896_0.jpg)`,
+		},
+		{
+			name:  "video in subfolder",
+			input: `![clip](../assets/2026_04_24/segeln-380_1777135173295_0.mp4)`,
+			want:  `{{< video src="segeln-380_1777135173295_0.mp4" >}}`,
+		},
+		{
+			name:  "flat asset still works",
+			input: `![photo](../assets/photo.jpg)`,
+			want:  `![photo](photo.jpg)`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := processor.ProcessContent(tt.input)
+			if got != tt.want {
+				t.Errorf("ProcessContent() =\n%q\nwant\n%q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestProcessContent_MixedMediaAndYouTube(t *testing.T) {
 	inputDir := t.TempDir()
 	outputDir := t.TempDir()

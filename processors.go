@@ -60,15 +60,16 @@ func (p *ImageProcessor) ProcessContent(content string) string {
 		// match[0] = entire match (e.g., "![photo](../assets/image.jpg)")
 		// match[1] = alt text (e.g., "photo")
 		// match[2] = path to assets (e.g., "../assets/")
-		// match[3] = filename (e.g., "image.jpg")
-		
+		// match[3] = relative path after "assets/" (e.g., "image.jpg" or "subfolder/image.jpg")
+
 		// Build the source path (where the media file currently is)
-		// filepath.Join combines path parts with the correct separator
 		src := filepath.Join(p.inputDir, match[2]+match[3])
-		
-		// Build the destination path (where to copy the media file)
-		dst := filepath.Join(p.outputDir, match[3])
-		
+
+		// Build the destination path using only the basename so that
+		// assets organised into subfolders (assets/PageName/file.jpg)
+		// are flattened into the Hugo leaf-bundle output directory.
+		dst := filepath.Join(p.outputDir, filepath.Base(match[3]))
+
 		// Copy the media file
 		p.copyFile(src, dst)
 	}
@@ -83,8 +84,8 @@ func (p *ImageProcessor) ProcessContent(content string) string {
 			return match // If pattern doesn't match, return unchanged
 		}
 		
-		altText := parts[1]  // The alt text
-		filename := parts[3]  // The filename
+		altText := parts[1]                    // The alt text
+		filename := filepath.Base(parts[3])    // basename only, strips any subfolder prefix
 		
 		// Check if this is a video file by extension
 		if isVideoFile(filename) {
