@@ -136,7 +136,9 @@ git_commit_and_push() {
         # Check whether anything changed beyond the journey map files.
         # Changes limited to journey-map.mp4 / journey.json alone do not
         # warrant a deployment, so we skip the commit in that case.
-        non_journey_changes=$(git status --porcelain | grep -v -E '(static/journey-map\.mp4|data/journey\.json)$')
+        # grep exits with code 1 when all lines are filtered out. Under `set -e`
+        # that would abort the script, so we treat "no matches" as a valid result.
+        non_journey_changes=$(git status --porcelain | grep -v -E '(static/journey-map\.mp4|data/journey\.json)$' || true)
 
         if [ -z "$non_journey_changes" ]; then
             echo -e "${YELLOW}Only journey map files changed — skipping commit to avoid unnecessary deployment${NC}"
