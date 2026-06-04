@@ -168,11 +168,10 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 **Workflow:**
 1. Watches for changes in Logseq directories
 2. Converts all markdown files to Hugo format
-3. **Generates the animated journey map** — extracts `current-position::` entries from journals, writes `data/journey.json`, and renders `static/journey-map.mp4`
-4. **Automatically translates** any new or modified `index.<lang>.md` files using the translation tool
-5. Commits all changes and pushes to remote (conversions + translations + map, when content also changed; skipped with `-try`)
+3. **Automatically translates** any new or modified `index.<lang>.md` files when conversion produced `.md` changes in the git repo
+4. **Generates the animated journey map** and commits/pushes (conversions + translations + map) only when step 3 found content changes; skipped with `-try`
 
-> **Note:** If the only files that changed are `data/journey.json` and `static/journey-map.mp4`, the commit is skipped. This avoids triggering a deployment (and its cost) just because your GPS position changed.
+> **Note:** If conversion did not change any `.md` files in the Hugo repo (for example, only a GPS `current-position::` update in journals), translation, journey map regeneration, and git push are all skipped. That avoids triggering a deployment (and its cost) for position-only updates.
 
 ### Keeping the watcher running
 

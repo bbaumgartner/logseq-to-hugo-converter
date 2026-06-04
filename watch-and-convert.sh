@@ -132,117 +132,76 @@ git_commit_and_push() {
     fi
     
     echo ""
-    echo -e "${YELLOW}Checking for git changes...${NC}"
+    echo -e "${GREEN}Committing and pushing changes...${NC}"
     
     cd "$GIT_REPO_DIR"
+    git add --all
+    git commit -m "automatic change by logseq-to-hugo-converter"
     
-    # Check if there are any changes at all
-    if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
-
-        # Check whether anything changed beyond the journey map files.
-        # Changes limited to journey-map.mp4 / journey.json alone do not
-        # warrant a deployment, so we skip the commit in that case.
-        # grep exits with code 1 when all lines are filtered out. Under `set -e`
-        # that would abort the script, so we treat "no matches" as a valid result.
-        non_journey_changes=$(git status --porcelain | grep -v -E '(static/journey-map\.mp4|data/journey\.json)$' || true)
-
-        if [ -z "$non_journey_changes" ]; then
-            echo -e "${YELLOW}Only journey map files changed — skipping commit to avoid unnecessary deployment${NC}"
-        else
-            echo -e "${GREEN}Changes detected, committing...${NC}"
-            
-            # Add all changes (journey map included when something else also changed)
-            git add --all
-            
-            # Commit with message
-            git commit -m "automatic change by logseq-to-hugo-converter"
-            
-            echo -e "${YELLOW}Pushing to remote...${NC}"
-            if git push; then
-                echo -e "${GREEN}Successfully pushed changes to remote${NC}"
-            else
-                echo -e "${RED}Failed to push changes${NC}"
-            fi
-        fi
+    echo -e "${YELLOW}Pushing to remote...${NC}"
+    if git push; then
+        echo -e "${GREEN}Successfully pushed changes to remote${NC}"
     else
-        echo -e "${YELLOW}No git changes detected${NC}"
+        echo -e "${RED}Failed to push changes${NC}"
     fi
     
     # Return to original directory
     cd - > /dev/null
 }
 
-# Function to translate changed markdown files
-translate_changed_files() {
+# Query: new or modified .md paths in the Hugo git repo (NUL-delimited on stdout).
+# No side effects — uses git -C so the caller's working directory is unchanged.
+find_changed_files() {
     if [ -z "$GIT_REPO_DIR" ]; then
-        return
+        return 0
     fi
-    
-    echo ""
-    echo -e "${YELLOW}🌍 Translating changed markdown files...${NC}"
-    
-    cd "$GIT_REPO_DIR"
-    
-    # Get list of new or modified .md files using git status --porcelain -z.
-    # The NUL-delimited format avoids quoted/escaped paths for non-ASCII names
-    # (e.g. "Törn"), so regex and basename matching remain reliable.
-    # --untracked-files=all ensures files inside brand-new directories are listed
-    # individually (without it, git collapses a new dir to "?? dir/" which doesn't
-    # match the \.md$ pattern and causes translation to be silently skipped).
-    # Format: XY<space>path\0
-    # A  = new file (staged)
-    # M  = modified (staged)
-    #  M = modified (unstaged)
-    # MM = modified, staged, then modified again
-    changed_files=()
+
+    # git status --porcelain -z avoids quoted/escaped paths for non-ASCII names
+    # (e.g. "Törn"). --untracked-files=all lists files inside new directories
+    # individually (otherwise git collapses to "?? dir/" and .md files are missed).
+    # Format: XY<space>path\0 — A/M/ M/MM/?? = added or modified.
     while IFS= read -r -d '' entry; do
         status="${entry:0:2}"
         file="${entry:3}"
 
         if [[ "$status" =~ ^(A |M |\ M|MM|\?\?)$ ]] && [[ "$file" == *.md ]]; then
-            changed_files+=("$file")
+            printf '%s\0' "$file"
         fi
-    done < <(git status --porcelain -z --untracked-files=all)
-    
-    if [ ${#changed_files[@]} -eq 0 ]; then
-        echo -e "${YELLOW}No .md files to translate${NC}"
-        cd - > /dev/null
-        return
-    fi
-    
-    # Filter for files that match index.<lang>.md pattern
-    translate_files=()
-    for file in "${changed_files[@]}"; do
+    done < <(git -C "$GIT_REPO_DIR" status --porcelain -z --untracked-files=all)
+}
+
+# Command: translate index.<lang>.md files from the given path list.
+translate_files() {
+    local files_to_translate=()
+    local file basename
+
+    for file in "$@"; do
         basename=$(basename "$file")
         if [[ "$basename" =~ ^index\.[a-z]{2}\.md$ ]]; then
-            translate_files+=("$file")
+            files_to_translate+=("$file")
         fi
     done
-    
-    if [ ${#translate_files[@]} -eq 0 ]; then
+
+    if [ ${#files_to_translate[@]} -eq 0 ]; then
         echo -e "${YELLOW}No index.<lang>.md files to translate${NC}"
-        cd - > /dev/null
-        return
+        return 0
     fi
-    
-    echo -e "Found ${GREEN}${#translate_files[@]}${NC} .md file(s) to translate:"
-    for file in "${translate_files[@]}"; do
+
+    echo ""
+    echo -e "${YELLOW}🌍 Translating changed markdown files...${NC}"
+    echo -e "Found ${GREEN}${#files_to_translate[@]}${NC} file(s) to translate:"
+    for file in "${files_to_translate[@]}"; do
         echo -e "  - $file"
     done
     echo ""
-    
-    # Translate each file
-    success_count=0
-    error_count=0
-    
-    for file in "${translate_files[@]}"; do
+
+    local success_count=0
+    local error_count=0
+
+    for file in "${files_to_translate[@]}"; do
         echo -e "${YELLOW}Translating:${NC} $file"
-        
-        # Get absolute path for the file
-        abs_file_path="$GIT_REPO_DIR/$file"
-        
-        # Run the translate command from the converter directory
-        # Use package path to compile all source files (excluding tests)
+
+        local abs_file_path="$GIT_REPO_DIR/$file"
         if (cd "$SCRIPT_DIR" && go run ./cmd/translate "$abs_file_path") 2>&1; then
             success_count=$((success_count+1))
         else
@@ -251,14 +210,11 @@ translate_changed_files() {
         fi
         echo ""
     done
-    
-    echo -e "${GREEN}✅ Translation complete: $success_count/${#translate_files[@]} files translated successfully${NC}"
+
+    echo -e "${GREEN}✅ Translation complete: $success_count/${#files_to_translate[@]} files translated successfully${NC}"
     if [ $error_count -gt 0 ]; then
         echo -e "${RED}Errors: $error_count${NC}"
     fi
-    
-    # Return to original directory
-    cd - > /dev/null
 }
 
 # Flag to track if this is the first run
@@ -321,30 +277,38 @@ convert_all_files() {
     fi
     echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     
-    # Generate animated journey map if git repo (Hugo site) is configured
-    if [ -n "$GIT_REPO_DIR" ]; then
-        echo ""
-        echo -e "${YELLOW}Generating animated journey map...${NC}"
-        JOURNEY_JSON="$GIT_REPO_DIR/data/journey.json"
-        JOURNEY_MP4="$GIT_REPO_DIR/static/journey-map.mp4"
-        if (cd "$SCRIPT_DIR" && go run ./cmd/journeymap "$INPUT_DIR/journals" "$JOURNEY_JSON") 2>&1; then
-            if [ -f "$JOURNEY_JSON" ]; then
-                if (cd "$SCRIPT_DIR" && go run ./cmd/animatemap "$JOURNEY_JSON" "$JOURNEY_MP4") 2>&1; then
-                    echo -e "${GREEN}Animated journey map written to $JOURNEY_MP4${NC}"
-                else
-                    echo -e "${RED}Failed to render animated journey map${NC}"
-                fi
-            fi
-        else
-            echo -e "${RED}Failed to extract journey positions${NC}"
-        fi
-    fi
+    # When conversion changed Hugo .md files, translate, regenerate the journey
+    # map, and commit (skips GPS-only journal updates with no .md changes).
+    changed_files=()
+    while IFS= read -r -d '' file; do
+        changed_files+=("$file")
+    done < <(find_changed_files)
 
-    # Translate changed files before committing
-    translate_changed_files
-    
-    # Commit and push changes if git repository is configured
-    git_commit_and_push
+    if [ ${#changed_files[@]} -eq 0 ]; then
+        echo -e "${YELLOW}No .md content changes — skipping journey map and git push${NC}"
+    else
+        translate_files "${changed_files[@]}"
+
+        if [ -n "$GIT_REPO_DIR" ]; then
+            echo ""
+            echo -e "${YELLOW}Generating animated journey map...${NC}"
+            JOURNEY_JSON="$GIT_REPO_DIR/data/journey.json"
+            JOURNEY_MP4="$GIT_REPO_DIR/static/journey-map.mp4"
+            if (cd "$SCRIPT_DIR" && go run ./cmd/journeymap "$INPUT_DIR/journals" "$JOURNEY_JSON") 2>&1; then
+                if [ -f "$JOURNEY_JSON" ]; then
+                    if (cd "$SCRIPT_DIR" && go run ./cmd/animatemap "$JOURNEY_JSON" "$JOURNEY_MP4") 2>&1; then
+                        echo -e "${GREEN}Animated journey map written to $JOURNEY_MP4${NC}"
+                    else
+                        echo -e "${RED}Failed to render animated journey map${NC}"
+                    fi
+                fi
+            else
+                echo -e "${RED}Failed to extract journey positions${NC}"
+            fi
+        fi
+
+        git_commit_and_push
+    fi
     
     echo ""
     echo -e "${YELLOW}Watching for changes... (Press Ctrl+C to stop)${NC}"
