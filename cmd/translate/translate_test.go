@@ -583,3 +583,27 @@ More content here.`
 		t.Errorf("Content mismatch after round-trip")
 	}
 }
+
+func TestBuildSystemPrompt(t *testing.T) {
+	deToEn := buildSystemPrompt("de", "en")
+	for _, want := range []string{"German", "English", "native blogger", "consistent terminology"} {
+		if !strings.Contains(deToEn, want) {
+			t.Errorf("de→en prompt missing %q", want)
+		}
+	}
+
+	esToFr := buildSystemPrompt("es", "fr")
+	for _, want := range []string{"Spanish", "French"} {
+		if !strings.Contains(esToFr, want) {
+			t.Errorf("es→fr prompt missing %q", want)
+		}
+	}
+
+	arrr := buildSystemPrompt("en", "arrr")
+	if !strings.Contains(arrr, "pirate") {
+		t.Error("arrr prompt should mention pirate style")
+	}
+	if strings.Contains(arrr, "Translate from") {
+		t.Error("arrr prompt should not use standard translation template")
+	}
+}

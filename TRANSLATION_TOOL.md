@@ -1,6 +1,6 @@
 # Hugo Markdown Translation Tool
 
-A standalone Go tool that translates Hugo markdown blog posts to multiple languages using OpenAI GPT-4-turbo.
+A standalone Go tool that translates Hugo markdown blog posts to multiple languages using OpenAI GPT-4.1.
 
 ## Features
 
@@ -159,10 +159,10 @@ The translation disclaimer is automatically provided in the following languages:
 
 ## Cost Estimation
 
-Translation costs depend on content length. Approximate costs with GPT-4-turbo:
-- Short blog post (~500 words): ~$0.04-0.08 per language
-- Medium blog post (~1500 words): ~$0.12-0.25 per language
-- Long blog post (~3000 words): ~$0.25-0.50 per language
+Translation costs depend on content length. Approximate costs with GPT-4.1:
+- Short blog post (~500 words): ~$0.01-0.03 per language
+- Medium blog post (~1500 words): ~$0.03-0.10 per language
+- Long blog post (~3000 words): ~$0.06-0.20 per language
 
 Each translation to 5 languages costs approximately 5x the per-language rate.
 
@@ -235,7 +235,7 @@ The translation tool is located in `cmd/translate/`:
 - `translate_writer.go` - Writes translated files to disk
 
 ### Model Configuration
-- Model: `gpt-4-turbo`
+- Model: `gpt-4.1`
 - Temperature: 0.3 for real-language translations (deterministic); 0.9 for Pirate Speak (creative)
 - Retry attempts: 3
 - Timeout: 10 minutes per translation run

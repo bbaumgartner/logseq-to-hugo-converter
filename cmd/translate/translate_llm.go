@@ -12,7 +12,10 @@ import (
 	"github.com/openai/openai-go/option"
 )
 
-// Translator handles translation using OpenAI GPT-4-turbo.
+// translationModel is the OpenAI chat model used for all translations.
+const translationModel = openai.ChatModelGPT4_1
+
+// Translator handles translation using OpenAI GPT-4.1.
 type Translator struct {
 	client *openai.Client
 }
@@ -31,39 +34,64 @@ func NewTranslator() (*Translator, error) {
 	}, nil
 }
 
+// languageDisplayName returns a human-readable language name for prompts.
+func languageDisplayName(code string) string {
+	names := map[string]string{
+		"en":   "English",
+		"de":   "German",
+		"es":   "Spanish",
+		"fr":   "French",
+		"it":   "Italian",
+		"arrr": "Pirate Speak",
+	}
+	if name, ok := names[code]; ok {
+		return name
+	}
+	return code
+}
+
 // buildSystemPrompt returns the appropriate system prompt for the given language pair.
 func buildSystemPrompt(sourceLang, targetLang string) string {
 	if targetLang == "arrr" {
-		return `Ye be a foul-mouthed, barnacle-covered sea dog of a translator. Rewrite the followin' English text into the most extreme, over-the-top pirate speak imaginable — like a mad captain three sheets to the wind on the high seas.
+		return `Ye be a foul-mouthed, barnacle-covered sea dog of a rewriter. Rewrite the followin' English blog text into the most extreme, over-the-top pirate speak imaginable — like a mad captain three sheets to the wind on the high seas.
 
-IMPORTANT RULES:
+STYLE:
+- Keep the same meaning, structure, and humor as the original; only the voice changes.
+- Go EXTREME with pirate speak — every sentence must drip with nautical swagger:
+  - Replace "you/your" with "ye/yer" throughout
+  - Replace "my/I/me" with "me" throughout
+  - Replace "is/are/was" with "be" throughout
+  - Replace "the" with "th'" frequently
+  - Pepper every few sentences with outbursts like "ARRR!", "BLIMEY!", "SHIVER ME TIMBERS!", "AVAST!", "BY DAVY JONES' LOCKER!"
+  - Replace mundane words with nautical equivalents where it fits (house→vessel, car→horseless carriage, toilet→the poop deck, travel→voyage, money→doubloons, etc.)
+  - Add dramatic pirate interjections mid-paragraph occasionally
+
+RULES:
 1. Preserve ALL markdown formatting exactly (links, images, headers, bold, italic, lists, tables, etc.)
-2. Keep proper nouns unchanged
-3. Go EXTREME with pirate speak — every sentence must drip with nautical swagger:
-   - Replace "you/your" with "ye/yer" throughout
-   - Replace "my/I/me" with "me" throughout
-   - Replace "is/are/was" with "be" throughout
-   - Replace "the" with "th'" frequently
-   - Pepper every few sentences with outbursts like "ARRR!", "BLIMEY!", "SHIVER ME TIMBERS!", "AVAST!", "BY DAVY JONES' LOCKER!"
-   - Replace mundane words with nautical equivalents: house→vessel, car→horseless carriage, road→landlubber's trail, toilet→the poop deck, eat→feast, walk→trek, go→sail, room→quarters, bed→hammock, city→port, travel→voyage, money→doubloons, problem→curse, etc.
-   - Add dramatic pirate interjections mid-paragraph
-   - End sentences with "says I!", "I tells ye!", "or I'll feed ye to the sharks!", "on me honour as a pirate!" occasionally
-4. Do NOT add any explanations, notes, or comments
-5. Return ONLY the rewritten text, nothing else
-6. Keep all HTML tags and shortcodes unchanged (e.g., {{< video src="..." >}})
-7. Do not translate file paths or URLs`
+2. Keep proper nouns, place names, and certification codes unchanged
+3. Do not translate file paths, URLs, HTML tags, or Hugo shortcodes (e.g. {{< video src="..." >}})
+4. Return ONLY the rewritten text — no explanations or notes`
 	}
 
-	return fmt.Sprintf(`You are a professional translator. Translate the following text from %s to %s.
+	sourceName := languageDisplayName(sourceLang)
+	targetName := languageDisplayName(targetLang)
 
-IMPORTANT RULES:
+	return fmt.Sprintf(`You are an expert translator for personal blog posts. Translate from %s to %s.
+
+QUALITY:
+- Write fluent, natural %s that reads like a native blogger wrote it — avoid stiff, literal, or machine-like phrasing.
+- Preserve the author's voice: informal, witty, serious, or sarcastic — match the source register.
+- Adapt idioms and cultural references for %s readers when needed; do not translate word-for-word if a natural equivalent exists.
+- Use consistent terminology and wording throughout the entire text (including repeated terms and names).
+
+CONTENT:
 1. Preserve ALL markdown formatting exactly (links, images, headers, bold, italic, lists, tables, etc.)
-2. Keep proper nouns in their original form unless they have a commonly used translation
-3. Maintain the same tone and style as the original
-4. Do NOT add any explanations, notes, or comments
-5. Return ONLY the translated text, nothing else
-6. Keep all HTML tags and shortcodes unchanged (e.g., {{< video src="..." >}})
-7. Do not translate file paths or URLs`, sourceLang, targetLang)
+2. Keep proper nouns, brand names, place names, and certification or license codes (e.g. SKS, SBF See, RYA, ASA) unless a standard %s exonym exists.
+3. Do not translate file paths, URLs, image filenames, HTML tags, or Hugo shortcodes (e.g. {{< video src="..." >}})
+
+OUTPUT:
+- Return ONLY the translated text.
+- No explanations, notes, glossaries, or translator comments.`, sourceName, targetName, targetName, targetName, targetName)
 }
 
 // temperatureFor returns the model temperature for a given target language.
@@ -76,7 +104,7 @@ func temperatureFor(targetLang string) float64 {
 	return 0.3
 }
 
-// TranslateText translates text to the target language using GPT-4-turbo.
+// TranslateText translates text to the target language using GPT-4.1.
 func (t *Translator) TranslateText(ctx context.Context, text, sourceLang, targetLang string) (string, error) {
 	systemPrompt := buildSystemPrompt(sourceLang, targetLang)
 
@@ -87,7 +115,7 @@ func (t *Translator) TranslateText(ctx context.Context, text, sourceLang, target
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		completion, apiErr := t.client.Chat.Completions.New(ctx, openai.ChatCompletionNewParams{
-			Model: openai.ChatModelGPT4Turbo,
+			Model: translationModel,
 			Messages: []openai.ChatCompletionMessageParamUnion{
 				openai.SystemMessage(systemPrompt),
 				openai.UserMessage(text),
