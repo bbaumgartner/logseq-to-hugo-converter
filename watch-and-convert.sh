@@ -56,7 +56,7 @@ if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
     echo "Example: $0 -try ./logseq/journals ./hugo/content/posts ./hugo"
     echo ""
     echo "Options:"
-    echo "  -try    Do everything except git push (useful for testing)"
+    echo "  -try    Do everything except git commit and push (useful for testing)"
     echo ""
     echo "The optional git_repo_directory will be used to automatically commit and push changes."
     exit 1
@@ -110,7 +110,7 @@ echo -e "Watching subdirectories: ${YELLOW}${WATCH_DIRS[*]}${NC}"
 echo -e "Output directory: ${YELLOW}$OUTPUT_DIR${NC}"
 if [ -n "$GIT_REPO_DIR" ]; then
     if [ "$TRY_MODE" = true ]; then
-        echo -e "Git repository: ${YELLOW}$GIT_REPO_DIR${NC} ${YELLOW}(try mode: commit only, no push)${NC}"
+        echo -e "Git repository: ${YELLOW}$GIT_REPO_DIR${NC} ${YELLOW}(try mode: no commit or push)${NC}"
     else
         echo -e "Git repository: ${YELLOW}$GIT_REPO_DIR${NC} ${GREEN}(auto-commit enabled)${NC}"
     fi
@@ -122,6 +122,12 @@ echo ""
 # Function to commit and push git changes
 git_commit_and_push() {
     if [ -z "$GIT_REPO_DIR" ]; then
+        return
+    fi
+
+    if [ "$TRY_MODE" = true ]; then
+        echo ""
+        echo -e "${YELLOW}[TRY MODE] Skipping git commit and push${NC}"
         return
     fi
     
@@ -151,16 +157,11 @@ git_commit_and_push() {
             # Commit with message
             git commit -m "automatic change by logseq-to-hugo-converter"
             
-            # Push to remote (unless in try mode)
-            if [ "$TRY_MODE" = true ]; then
-                echo -e "${YELLOW}[TRY MODE] Skipping git push - changes are committed locally only${NC}"
+            echo -e "${YELLOW}Pushing to remote...${NC}"
+            if git push; then
+                echo -e "${GREEN}Successfully pushed changes to remote${NC}"
             else
-                echo -e "${YELLOW}Pushing to remote...${NC}"
-                if git push; then
-                    echo -e "${GREEN}Successfully pushed changes to remote${NC}"
-                else
-                    echo -e "${RED}Failed to push changes${NC}"
-                fi
+                echo -e "${RED}Failed to push changes${NC}"
             fi
         fi
     else

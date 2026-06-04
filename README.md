@@ -152,7 +152,7 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 ```
 
 **Parameters:**
-- `-try` (optional): Do everything except git push (useful for testing)
+- `-try` (optional): Do everything except git commit and push (useful for testing)
 - `input_directory`: Path to your Logseq data directory
 - `output_directory`: Where converted blog posts should be written
 - `git_repo_directory` (optional): Git repository to automatically commit and push changes to
@@ -163,15 +163,14 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 - Waits 30 minutes after detecting changes to batch multiple edits together
 - **Automatic translation**: Detects new or changed markdown files and translates them to all supported languages (English, German, Spanish, French, Italian, Pirate Speak)
 - Optionally commits and pushes changes to a git repository
-- Try mode (`-try` flag) for testing without pushing to remote
+- Try mode (`-try` flag) for testing without committing or pushing to remote
 
 **Workflow:**
 1. Watches for changes in Logseq directories
 2. Converts all markdown files to Hugo format
 3. **Generates the animated journey map** — extracts `current-position::` entries from journals, writes `data/journey.json`, and renders `static/journey-map.mp4`
 4. **Automatically translates** any new or modified `index.<lang>.md` files using the translation tool
-5. Commits all changes (conversions + translations + map, when content also changed)
-6. Pushes to remote (unless `-try` flag is used)
+5. Commits all changes and pushes to remote (conversions + translations + map, when content also changed; skipped with `-try`)
 
 > **Note:** If the only files that changed are `data/journey.json` and `static/journey-map.mp4`, the commit is skipped. This avoids triggering a deployment (and its cost) just because your GPS position changed.
 
