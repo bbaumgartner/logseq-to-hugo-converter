@@ -175,6 +175,143 @@ The `watch-and-convert.sh` script is cross-platform and works on both macOS and 
 
 > **Note:** If the only files that changed are `data/journey.json` and `static/journey-map.mp4`, the commit is skipped. This avoids triggering a deployment (and its cost) just because your GPS position changed.
 
+### Keeping the watcher running
+
+If you start `./watch-and-convert.sh` in an SSH session and disconnect, the shell usually sends **SIGHUP** and the watcher stops. Use one of the options below depending on whether you only need it to survive logout or also **machine reboots**.
+
+Use **absolute paths** in every example (systemd and `nohup` do not resolve relative paths the way an interactive shell does).
+
+#### Check whether it is running
+
+```bash
+pgrep -af watch-and-convert
+# or, if you saved a PID file (see nohup example below):
+kill -0 "$(cat ~/logseq-watch-and-convert.pid)" 2>/dev/null && echo running || echo not running
+```
+
+#### Option A: `nohup` (survives SSH disconnect, not reboot)
+
+Good for a quick setup on any Linux/macOS host. The process is **not** restarted after a reboot.
+
+```bash
+cd /path/to/logseq-to-hugo-converter
+
+# Ensure OPENAI_API_KEY is set in this shell if you use translation (see above)
+export OPENAI_API_KEY='sk-...'   # or rely on ~/.bashrc if you source it here
+
+nohup ./watch-and-convert.sh \
+  /path/to/logseq-data \
+  /path/to/hugo-data/content/posts/ \
+  /path/to/hugo-data \
+  >> "$HOME/logseq-watch-and-convert.log" 2>&1 &
+
+echo $! > "$HOME/logseq-watch-and-convert.pid"
+```
+
+View logs: `tail -f ~/logseq-watch-and-convert.log`  
+Stop it: `kill "$(cat ~/logseq-watch-and-convert.pid)"`
+
+#### Option B: `tmux` or `screen` (survives SSH disconnect, not reboot)
+
+Start a detached session, run the script in the foreground there, then disconnect from SSH:
+
+```bash
+tmux new -s logseq-watch
+cd /path/to/logseq-to-hugo-converter
+./watch-and-convert.sh /path/to/logseq-data /path/to/hugo-data/content/posts/ /path/to/hugo-data
+# Detach: Ctrl+B then D
+```
+
+Reattach later: `tmux attach -t logseq-watch`
+
+#### Option C: `systemd` on Linux (survives reboot)
+
+Recommended on Ubuntu (or any systemd host) when the watcher should start automatically after reboot and restart on failure.
+
+**1. Prerequisites on the machine**
+
+- `inotify-tools`, Go, `ffmpeg`, and this repository cloned to a fixed path (e.g. `/home/you/logseq-to-hugo-converter`).
+- `watch-and-convert.sh` must be executable: `chmod +x /path/to/logseq-to-hugo-converter/watch-and-convert.sh`
+- If you use **git push**, configure credentials for the user that runs the service (SSH deploy key in `~/.ssh`, or HTTPS credential helper). A non-interactive `git push` from systemd will fail if auth only worked in an interactive SSH session.
+
+**2. Environment file (optional translation API key)**
+
+```bash
+mkdir -p ~/.config
+cat > ~/.config/logseq-watch-and-convert.env <<'EOF'
+OPENAI_API_KEY=sk-...
+# Uncomment if `go` is not on systemd's default PATH:
+# PATH=/usr/local/go/bin:/usr/local/bin:/usr/bin:/bin
+EOF
+chmod 600 ~/.config/logseq-watch-and-convert.env
+```
+
+**3. System service (runs as your user)**
+
+Edit paths and username, then install:
+
+```bash
+sudo tee /etc/systemd/system/logseq-watch-and-convert.service <<'EOF'
+[Unit]
+Description=Logseq to Hugo file watcher
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=youruser
+Group=youruser
+WorkingDirectory=/home/youruser/logseq-to-hugo-converter
+Environment=HOME=/home/youruser
+EnvironmentFile=-/home/youruser/.config/logseq-watch-and-convert.env
+ExecStart=/home/youruser/logseq-to-hugo-converter/watch-and-convert.sh \
+  /home/youruser/logseq-data \
+  /home/youruser/hugo-data/content/posts/ \
+  /home/youruser/hugo-data
+Restart=on-failure
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now logseq-watch-and-convert.service
+```
+
+**Useful commands:**
+
+```bash
+sudo systemctl status logseq-watch-and-convert.service
+sudo journalctl -u logseq-watch-and-convert.service -f
+sudo systemctl restart logseq-watch-and-convert.service
+sudo systemctl stop logseq-watch-and-convert.service
+```
+
+**4. User service (alternative, no `sudo` for the unit file)**
+
+If Logseq and Hugo data live only under your home directory, a **user** unit can be simpler:
+
+```bash
+mkdir -p ~/.config/systemd/user
+# Create ~/.config/systemd/user/logseq-watch-and-convert.service
+# (same [Service] ExecStart/Environment as above, but omit User=/Group=)
+systemctl --user daemon-reload
+systemctl --user enable --now logseq-watch-and-convert.service
+```
+
+User services normally stop when you log out. To keep them running at boot **without** staying logged in:
+
+```bash
+sudo loginctl enable-linger "$USER"
+```
+
+Then check: `systemctl --user status logseq-watch-and-convert.service`
+
+#### macOS after reboot
+
+`systemd` is not available on macOS. For reboot persistence, use **launchd** (a `.plist` in `~/Library/LaunchAgents/`) or run the watcher on a always-on Linux host. For logout-only persistence, `nohup` or `tmux` work the same as on Linux.
+
 ### Manual Conversion
 
 You can also convert individual files without the watcher:
