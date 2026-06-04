@@ -68,9 +68,10 @@ STYLE:
 
 RULES:
 1. Preserve ALL markdown formatting exactly (links, images, headers, bold, italic, lists, tables, etc.)
-2. Keep proper nouns, place names, and certification codes unchanged
-3. Do not translate file paths, URLs, HTML tags, or Hugo shortcodes (e.g. {{< video src="..." >}})
-4. Return ONLY the rewritten text — no explanations or notes`
+2. In image syntax ![alt](filename.jpg), you may change alt text but the filename inside parentheses must stay byte-for-byte identical to the source
+3. Keep proper nouns, place names, and certification codes unchanged
+4. Do not change file paths, URLs, or any src="..." value in Hugo shortcodes (e.g. {{< video src="..." >}})
+5. Return ONLY the rewritten text — no explanations or notes`
 	}
 
 	sourceName := languageDisplayName(sourceLang)
@@ -86,8 +87,9 @@ QUALITY:
 
 CONTENT:
 1. Preserve ALL markdown formatting exactly (links, images, headers, bold, italic, lists, tables, etc.)
-2. Keep proper nouns, brand names, place names, and certification or license codes (e.g. SKS, SBF See, RYA, ASA) unless a standard %s exonym exists.
-3. Do not translate file paths, URLs, image filenames, HTML tags, or Hugo shortcodes (e.g. {{< video src="..." >}})
+2. In image syntax ![alt](filename.jpg), you may translate the alt text but the filename inside parentheses must stay byte-for-byte identical to the source — never rename, translate, or reformat it (keep hyphens, underscores, and extensions exactly)
+3. Keep proper nouns, brand names, place names, and certification or license codes (e.g. SKS, SBF See, RYA, ASA) unless a standard %s exonym exists.
+4. Do not translate file paths, URLs, HTML tags, or Hugo shortcode src attributes (e.g. {{< video src="clip.mp4" >}} must keep the same src value)
 
 OUTPUT:
 - Return ONLY the translated text.
@@ -208,6 +210,7 @@ func (t *Translator) TranslateMarkdownFile(ctx context.Context, mf *MarkdownFile
 	if err != nil {
 		return nil, fmt.Errorf("translating content: %w", err)
 	}
+	translatedContent = restoreAssetReferences(mf.Content, translatedContent)
 
 	// Add translation disclaimer at the end
 	disclaimer := getTranslationDisclaimer(targetLang.Code, mf.SourceLang)

@@ -133,6 +133,7 @@ Input files must:
 
 ### What Gets Preserved
 - Frontmatter fields: `date`, `lastmod`, `draft`, `params.*`
+- Image link targets and Hugo shortcode `src` values (restored from the source file after translation, so filenames like `sunset-ibiza_1769102013331_0.jpg` never change)
 - Markdown formatting (bold, italic, links, images, etc.)
 - Hugo shortcodes (e.g., `{{< video src="..." >}}`)
 - File paths and URLs
